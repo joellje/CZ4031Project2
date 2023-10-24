@@ -1,2 +1,5 @@
 psycopg2==2.9.9
 psycopg2-binary==2.9.2
+PyQt6==6.5.3
+PyQt6-Qt6==6.5.3
+PyQt6-sip==13.6.0

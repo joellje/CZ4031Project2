@@ -19,9 +19,9 @@ cd scripts
 -   Create a new Python virtual environment:
 
 ```
-python -m venv spotify-chat (Mac)
+python -m venv venv (Mac)
 
-py -m venv spotify-chat (Windows 11)
+py -m venv venv (Windows 11)
 ```
 
 -   Start virtual environment manually by running:
