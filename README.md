@@ -34,4 +34,4 @@ source venv/bin/activate (Mac)
 
 -   Install Python requirements in the project repository: `pip install -r requirements.txt`
 
--   Run GUI: `python gui.py`
+-   Run GUI: `python project.py`

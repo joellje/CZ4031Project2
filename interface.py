@@ -1,6 +1,8 @@
 import psycopg2
 import sys
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QTextEdit, QScrollArea
+import json
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QTextEdit, QScrollArea, QTextBrowser
+from explore import Node
 
 class DatabaseInputForm(QWidget):
     def __init__(self):
@@ -20,8 +22,7 @@ class DatabaseInputForm(QWidget):
         self.lbl_host = QLabel('Host:')
         self.lbl_password = QLabel('Password:')
         self.lbl_port = QLabel('Port:')
-        self.lbl_result = QLabel('Connection details will be displayed here after connecting.')
-
+        self.lbl_result = QLabel('Connection errors will be displayed here if necessary.')
 
         self.edit_db = QLineEdit()
         self.edit_db.setPlaceholderText('postgres')
@@ -36,6 +37,8 @@ class DatabaseInputForm(QWidget):
 
         self.btn_connect = QPushButton('Connect', self)
         self.btn_connect.clicked.connect(self.connect_to_database)
+        self.quit_button = QPushButton('Quit', self)
+        self.quit_button.clicked.connect(self.close_application)
 
         # Set up the layout
         layout = QVBoxLayout()
@@ -53,12 +56,12 @@ class DatabaseInputForm(QWidget):
         layout.addWidget(self.edit_port)
         layout.addWidget(self.btn_connect)
         layout.addWidget(self.lbl_result)
-
+        layout.addWidget(self.quit_button)
 
         self.setLayout(layout)
 
         # Set up the window
-        self.setGeometry(300, 300, 300, 200)
+        self.setGeometry(400, 400, 300, 200)
         self.setWindowTitle('Database Connection Input')
         self.show()
 
@@ -88,6 +91,9 @@ class DatabaseInputForm(QWidget):
         except Exception as e:
             self.lbl_result.setText(f"Failed to connect to database: {database}. Error: {e}")
 
+    def close_application(self):
+        QApplication.quit()
+
 class QueryInputForm(QWidget):
     def __init__(self, database, user, password, host, port):
         super().__init__()
@@ -104,13 +110,20 @@ class QueryInputForm(QWidget):
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
 
-        self.details_label = QLabel(f"Querying database: : {self.database}@{self.host}:{self.port}")
+        self.lbl_details = QLabel(f"Querying database: {self.database}@{self.host}:{self.port}")
+
+        self.lbl_queryplantext = QLabel("Query Plan (Text):")
+        self.lbl_queryplanvisual = QLabel("Query Plan (Visual):")
 
         self.query_input = QTextEdit()
-        self.lbl_result = QLabel('Result details will be displayed here after querying.')
+        self.query_input.setPlaceholderText("e.g.SELECT * FROM orders AS o INNER JOIN customer AS c ON o.o_custkey = c.c_custkey;")
+        self.lbl_result = QTextBrowser()
+        self.lbl_result.setPlainText('Result details will be displayed here after querying.')
 
         self.execute_button = QPushButton('Execute Query', self)
         self.execute_button.clicked.connect(lambda: self.execute_query(self.query_input.toPlainText()))
+        self.quit_button = QPushButton('Quit', self)
+        self.quit_button.clicked.connect(self.close_application)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -118,18 +131,24 @@ class QueryInputForm(QWidget):
         
         layout = QVBoxLayout()
         layout.addWidget(self.lbl_heading)
-        layout.addWidget(self.details_label)
+        layout.addWidget(self.lbl_details)
         layout.addWidget(self.query_input)
         layout.addWidget(self.execute_button)
-        # layout.addWidget(self.lbl_result)
+        layout.addWidget(self.lbl_queryplantext)
         layout.addWidget(self.scroll_area)
+        layout.addWidget(self.lbl_queryplanvisual)
+        layout.addWidget(self.quit_button)
+
 
         self.setLayout(layout)
-        self.setGeometry(400, 400, 500, 300)
-        self.setFixedWidth(400)
+        self.setGeometry(400, 400, 600, 600)
+        self.setFixedWidth(1000)
+        self.setFixedHeight(1000)
         self.setWindowTitle('Query Input')
         self.show()
 
+    def close_application(self):
+        QApplication.quit()
 
     def execute_query(self, query):
         try:
@@ -141,16 +160,27 @@ class QueryInputForm(QWidget):
                 port=self.port
             )
             cursor_obj = con.cursor()
-            self.lbl_result.setText(f"Getting query plan...")
+            self.lbl_result.setPlainText(f"Getting query plan...")
             query = "EXPLAIN (BUFFERS TRUE, COSTS TRUE, SETTINGS TRUE, WAL TRUE, TIMING TRUE, SUMMARY TRUE, ANALYZE TRUE, FORMAT JSON) " + query
             print("Executing query: " + query)
             cursor_obj.execute(query)
             result = cursor_obj.fetchall()
-            self.lbl_result.setText(f"Results: {result}")
-        except Exception as e:
-            self.lbl_result.setText(f"Failed to execute the query. Error: {e}")
+            self.lbl_result.setPlainText(json.dumps(result, indent=4))
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    window = DatabaseInputForm()
-    sys.exit(app.exec())
+            # TODO: Parse result which returns root node
+            self.root = self.parse_result_test(result)
+            # TODO: Visualize tree
+        except Exception as e:
+            self.lbl_result.setPlainText(f"Failed to execute the query. Error: {e}")
+
+    def parse_result_test(self, result):
+        rootgrandchild1 = Node(None, var5 = 4, var6 = 2)
+        rootgrandchild2 = Node(None, var2 = 1, var4 = 2)
+        rootgrandchild3 = Node(None, var3 = 2, var2 = 3)
+        rootgrandchild4 = Node(None, var1 = 2, var3 = 3)
+        rootchild1 = Node([rootgrandchild1, rootgrandchild2], var2 = 2)
+        rootchild2 = Node([rootgrandchild3], var2 = 2)
+        rootchild3 = Node([rootgrandchild4], var2 = 2)
+        root = Node([rootchild1, rootchild2, rootchild3], var1 = 1)
+
+        return root
