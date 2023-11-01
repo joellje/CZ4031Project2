@@ -31,6 +31,9 @@ class DatabaseConnection:
         )
 
     def connection_url(self) -> str:
+        """
+        Get the url of this connection
+        """
         return "postgres://{}:<PASSWORD>@{}:{}/{}".format(
             self._user, self._host, self._port, self._database
         )
@@ -47,7 +50,7 @@ class DatabaseConnection:
                             TIMING TRUE, \
                             SUMMARY TRUE, \
                             ANALYZE TRUE, \
-                            FORMAT JSON\
+                            FORMAT JSON \
                         ) \
                         {query}"
             )
@@ -73,7 +76,7 @@ class QueryExecutionPlan:
         Constructs the query execution plan graph
 
         Args:
-            plan: query execution plan an a json string
+            plan: query execution plan an a dictionary
         """
         self.planning_time = plan[PLANNING_TIME]
         self.execution_time = plan[EXECUTION_TIME]
