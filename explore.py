@@ -18,12 +18,21 @@ class DatabaseConnection:
     def __init__(
         self, host: str, user: str, password: str, database: str, port: int
     ) -> None:
+        self._host = host
+        self._user = user
+        self._database = database
+        self._port = port
         self._con = psycopg2.connect(
-            database=database,
-            user=user,
+            database=self._database,
+            user=self._user,
             password=password,
-            host=host,
-            port=port,
+            host=self._host,
+            port=self._port,
+        )
+
+    def connection_url(self) -> str:
+        return "postgres://{}:<PASSWORD>@{}:{}/{}".format(
+            self._user, self._host, self._port, self._database
         )
 
     def _query_qep(self, query: str) -> Dict[str, Any]:
