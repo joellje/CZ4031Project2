@@ -38,7 +38,7 @@ class DatabaseConnection:
             self._user, self._host, self._port, self._database
         )
 
-    def query_qep(self, query: str) -> Dict[str, Any]:
+    def _query_qep(self, query: str) -> Dict[str, Any]:
         with self._con.cursor() as cursor:
             cursor.execute(
                 f"EXPLAIN \
@@ -61,11 +61,19 @@ class DatabaseConnection:
                 raise ValueError
 
     def get_qep(self, query: str) -> QueryExecutionPlan:
-        output = self.query_qep(query)
+        output = self._query_qep(query)
         qep = QueryExecutionPlan(output)
-        return qep
+        return [output, qep]
     
-    def get_block_content(self, block_id: int, relation: str) -> List:
+    def get_block_contents(self, block_id: int, relation: str) -> List:
+        """get contents of block with block_id of relation
+        
+        Keyword arguments:
+        block_id -- block_id of block
+        relation -- relation that contains block
+        Return: list of tuples with block_id of relation
+        """
+        
         with self._con.cursor() as cursor:
             print(f"SELECT ctid, * FROM {relation} WHERE (ctid::text::point)[0]::bigint IN (SELECT (ctid::text::point)[0]::bigint FROM {relation} WHERE ctid = '({block_id}, 1)');")
             cursor.execute(
@@ -128,10 +136,15 @@ class Node:
 
 if __name__ == "__main__":
     db_con = DatabaseConnection(
-        "localhost", "postgres", "postgres", "postgres", 5432
+        "localhost", "", "postgres", "postgres", 5432
     )
     print(
         db_con.get_qep(
             "SELECT * FROM customer join nation on customer.c_nationkey = nation.n_nationkey;"
-        )
+        )[1]
     )
+
+    root = db_con.get_qep(
+            "SELECT * FROM customer join nation on customer.c_nationkey = nation.n_nationkey;"
+        )[1].root
+    print(root.children[0].attributes)

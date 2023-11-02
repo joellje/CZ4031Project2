@@ -140,17 +140,17 @@ class QueryInputForm(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.lbl_result)
 
-        layout = QVBoxLayout()
-        layout.addWidget(self.lbl_heading)
-        layout.addWidget(self.lbl_details)
-        layout.addWidget(self.query_input)
-        layout.addWidget(self.execute_button)
-        layout.addWidget(self.lbl_queryplantext)
-        layout.addWidget(self.scroll_area)
-        layout.addWidget(self.lbl_queryplanvisual)
-        layout.addWidget(self.quit_button)
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.lbl_heading)
+        self.layout.addWidget(self.lbl_details)
+        self.layout.addWidget(self.query_input)
+        self.layout.addWidget(self.execute_button)
+        self.layout.addWidget(self.lbl_queryplantext)
+        self.layout.addWidget(self.scroll_area)
+        self.layout.addWidget(self.lbl_queryplanvisual)
+        self.layout.addWidget(self.quit_button)
 
-        self.setLayout(layout)
+        self.setLayout(self.layout)
         self.setGeometry(400, 400, 600, 600)
         self.setFixedWidth(1000)
         self.setFixedHeight(1000)
@@ -163,18 +163,16 @@ class QueryInputForm(QWidget):
     def execute_query(self, query):
         try:
             self.lbl_result.setPlainText(f"Getting query plan...")
-            print("Executing query: " + query)
-            result = self._con.query_qep(query)
-            self.lbl_result.setPlainText(json.dumps(result, indent=4)) # displays QEP as JSON
-
-            qep = self._con.get_qep(query)
+            print("Getting QEP for: " + query)
+            qepjson, qep = self._con.get_qep(query)
+            self.lbl_result.setPlainText(json.dumps(qepjson, indent=4)) # displays QEP as JSON
             planning_time = qep.planning_time
             execution_time = qep.execution_time
             root = qep.root
-            blocks_accessed = qep.blocks._accessed
+            blocks_accessed = qep.blocks_accessed
 
-            for block_id, relation in [blocks_accessed]:
-                block_contents = self._con.get_block_content(block_id, relation) # returns list of tuples of relation with that block_id
+            for block_id, relation in blocks_accessed:
+                block_contents = self._con.get_block_contents(block_id, relation)
                 for tuple in block_contents:
                     print(tuple) # TODO: display tuple nicely
 
@@ -182,15 +180,3 @@ class QueryInputForm(QWidget):
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
-
-    def parse_result_test(self, result):
-        rootgrandchild1 = Node(None, var5=4, var6=2)
-        rootgrandchild2 = Node(None, var2=1, var4=2)
-        rootgrandchild3 = Node(None, var3=2, var2=3)
-        rootgrandchild4 = Node(None, var1=2, var3=3)
-        rootchild1 = Node([rootgrandchild1, rootgrandchild2], var2=2)
-        rootchild2 = Node([rootgrandchild3], var2=2)
-        rootchild3 = Node([rootgrandchild4], var2=2)
-        root = Node([rootchild1, rootchild2, rootchild3], var1=1)
-
-        return root
