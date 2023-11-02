@@ -38,7 +38,7 @@ class DatabaseConnection:
             self._user, self._host, self._port, self._database
         )
 
-    def _query_qep(self, query: str) -> Dict[str, Any]:
+    def query_qep(self, query: str) -> Dict[str, Any]:
         with self._con.cursor() as cursor:
             cursor.execute(
                 f"EXPLAIN \
@@ -61,9 +61,22 @@ class DatabaseConnection:
                 raise ValueError
 
     def get_qep(self, query: str) -> QueryExecutionPlan:
-        output = self._query_qep(query)
+        output = self.query_qep(query)
         qep = QueryExecutionPlan(output)
         return qep
+    
+    def get_block_content(self, block_id: int, relation: str) -> List:
+        with self._con.cursor() as cursor:
+            print(f"SELECT ctid, * FROM {relation} WHERE (ctid::text::point)[0]::bigint IN (SELECT (ctid::text::point)[0]::bigint FROM {relation} WHERE ctid = '({block_id}, 1)');")
+            cursor.execute(
+                f"SELECT ctid, * FROM {relation} WHERE (ctid::text::point)[0]::bigint IN (SELECT (ctid::text::point)[0]::bigint FROM {relation} WHERE ctid = '({block_id}, 1)');"
+            )
+            out = cursor.fetchall()
+            if out:
+                return out
+            else:
+                raise ValueError
+
 
 
 class QueryExecutionPlan:
@@ -119,6 +132,6 @@ if __name__ == "__main__":
     )
     print(
         db_con.get_qep(
-            "SELECT * FROM customer join nation on customer.c_nationkey = nation.n_nationkey ;"
+            "SELECT * FROM customer join nation on customer.c_nationkey = nation.n_nationkey;"
         )
     )

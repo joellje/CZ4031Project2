@@ -162,20 +162,22 @@ class QueryInputForm(QWidget):
 
     def execute_query(self, query):
         try:
-            cursor_obj = self._con.cursor()
             self.lbl_result.setPlainText(f"Getting query plan...")
-            query = (
-                "EXPLAIN (BUFFERS TRUE, COSTS TRUE, SETTINGS TRUE, WAL TRUE, TIMING TRUE, SUMMARY TRUE, ANALYZE TRUE, FORMAT JSON) "
-                + query
-            )
             print("Executing query: " + query)
-            cursor_obj.execute(query)
-            result = cursor_obj.fetchall()
-            self.lbl_result.setPlainText(json.dumps(result, indent=4))
+            result = self._con.query_qep(query)
+            self.lbl_result.setPlainText(json.dumps(result, indent=4)) # displays QEP as JSON
 
-            # TODO: Parse result which returns root node
-            self.root = self.parse_result_test(result)
-            # TODO: Visualize tree
+            qep = self._con.get_qep(query)
+            planning_time = qep.planning_time
+            execution_time = qep.execution_time
+            root = qep.root
+            blocks_accessed = qep.blocks._accessed
+
+            for block_id, relation in [blocks_accessed]:
+                block_contents = self._con.get_block_content(block_id, relation) # returns list of tuples of relation with that block_id
+                for tuple in block_contents:
+                    print(tuple) # TODO: display tuple nicely
+
         except Exception as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
