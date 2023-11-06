@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
