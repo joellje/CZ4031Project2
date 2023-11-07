@@ -165,16 +165,24 @@ class QueryInputForm(QWidget):
             self.lbl_result.setPlainText(f"Getting query plan...")
             print("Getting QEP for: " + query)
             qepjson, qep = self._con.get_qep(query)
-            self.lbl_result.setPlainText(json.dumps(qepjson, indent=4)) # displays QEP as JSON
+            self.lbl_result.setPlainText(
+                json.dumps(qepjson, indent=4)
+            )  # displays QEP as JSON
             planning_time = qep.planning_time
             execution_time = qep.execution_time
             root = qep.root
             blocks_accessed = qep.blocks_accessed
 
-            for block_id, relation in blocks_accessed:
-                block_contents = self._con.get_block_contents(block_id, relation)
-                for tuple in block_contents:
-                    print(tuple) # TODO: display tuple nicely
+            for relation, block_ids in blocks_accessed.items():
+                print(f"Relation: {relation}")
+                for id in block_ids:
+                    block_contents = self._con.get_block_contents(
+                        id, relation
+                    )
+                    for tuple in block_contents:
+                        print(
+                            f"block id: {id} - {tuple}"
+                        )  # TODO: display tuple nicely
 
         except Exception as e:
             self.lbl_result.setPlainText(

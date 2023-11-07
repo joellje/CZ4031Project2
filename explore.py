@@ -1,7 +1,7 @@
 from __future__ import annotations
-from collections import defaultdict
 
 import dataclasses
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg2
@@ -75,11 +75,10 @@ class DatabaseConnection:
         """
 
         with self._con.cursor() as cursor:
-            print(
-                f"SELECT ctid, * FROM {relation} WHERE (ctid::text::point)[0]::bigint IN (SELECT (ctid::text::point)[0]::bigint FROM {relation} WHERE ctid = '({block_id}, 1)');"
-            )
             cursor.execute(
-                f"SELECT ctid, * FROM {relation} WHERE (ctid::text::point)[0]::bigint IN (SELECT (ctid::text::point)[0]::bigint FROM {relation} WHERE ctid = '({block_id}, 1)');"
+                f"SELECT ctid, * \
+                  FROM {relation} \
+                  WHERE (ctid::text::point)[0]::bigint = {block_id};"
             )
             out = cursor.fetchall()
             if out:
@@ -114,8 +113,13 @@ class QueryExecutionPlan:
         """
         self.planning_time = plan[PLANNING_TIME]
         self.execution_time = plan[EXECUTION_TIME]
+        plan = plan["Plan"]
+        node_type = plan.pop("Node Type")
+        children = plan.pop("Plans", None)
         self.root = Node(
-            plan["Plan"]["Node Type"], plan["Plan"]["Plans"], **plan["Plan"]
+            node_type,
+            children,
+            **plan,
         )
         self.blocks_accessed = self._get_blocks_accessed(self.root, con)
 
@@ -160,8 +164,8 @@ class Node:
         if children is not None:
             self.children = [
                 Node(
-                    child["Node Type"],
-                    child["Plans"] if "Plans" in child.keys() else None,
+                    child.pop("Node Type"),
+                    child.pop("Plans", None),
                     **child,
                 )
                 for child in children
