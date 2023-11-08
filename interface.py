@@ -126,8 +126,9 @@ class QueryInputForm(QWidget):
         self.lbl_queryplanvisual = QLabel("Query Plan (Visual):")
 
         self.query_input = QTextEdit()
+        self.query_input.setAcceptRichText(False)
         self.query_input.setPlaceholderText(
-            "e.g.SELECT * FROM orders AS o INNER JOIN customer AS c ON o.o_custkey = c.c_custkey;"
+            "e.g. SELECT * FROM orders AS o INNER JOIN customer AS c ON o.o_custkey = c.c_custkey;"
         )
         self.lbl_result = QTextBrowser()
         self.lbl_result.setPlainText(
