@@ -13,6 +13,10 @@ class DatabaseInputForm(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.PLACEHOLDER_DB = self.PLACEHOLDER_USER = self.PLACEHOLDER_PASSWORD = "postgres"
+        self.PLACEHOLDER_HOST = "0.0.0.0"
+        self.PLACEHOLDER_PORT = "5432"
+
         self.init_ui()
 
     def init_ui(self):
@@ -20,7 +24,7 @@ class DatabaseInputForm(QWidget):
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
 
         self.lbl_instructions = QLabel(
-            f"Input your database name, user, password, host and port.\nIf you want to use the default database, input as per the placeholder."
+            f"Input your database name, user, password, host and port.\nIf you want to use the default database, leave all fields empty."
         )
         self.lbl_instructions.setStyleSheet("font-size: 16pt;")
 
@@ -34,15 +38,15 @@ class DatabaseInputForm(QWidget):
         )
 
         self.edit_db = QLineEdit()
-        self.edit_db.setPlaceholderText("postgres")
+        self.edit_db.setPlaceholderText(self.PLACEHOLDER_DB)
         self.edit_user = QLineEdit()
-        self.edit_user.setPlaceholderText("")
+        self.edit_user.setPlaceholderText(self.PLACEHOLDER_USER)
         self.edit_password = QLineEdit()
-        self.edit_password.setPlaceholderText("postgres")
+        self.edit_password.setPlaceholderText(self.PLACEHOLDER_PASSWORD)
         self.edit_host = QLineEdit()
-        self.edit_host.setPlaceholderText("0.0.0.0")
+        self.edit_host.setPlaceholderText(self.PLACEHOLDER_HOST)
         self.edit_port = QLineEdit()
-        self.edit_port.setPlaceholderText("5432")
+        self.edit_port.setPlaceholderText(self.PLACEHOLDER_PORT)
 
         self.btn_connect = QPushButton("Connect", self)
         self.btn_connect.clicked.connect(self.connect_to_database)
@@ -75,11 +79,12 @@ class DatabaseInputForm(QWidget):
         self.show()
 
     def connect_to_database(self):
-        database = self.edit_db.text()
-        user = self.edit_user.text()
-        password = self.edit_password.text()
-        host = self.edit_host.text()
-        port = self.edit_port.text()
+        database = self.edit_db.text() if self.edit_db.text() != "" else self.PLACEHOLDER_DB
+        user = self.edit_user.text() if self.edit_user.text() != "" else self.PLACEHOLDER_USER
+        password = self.edit_password.text() if self.edit_password.text(
+        ) != "" else self.PLACEHOLDER_PASSWORD
+        host = self.edit_host.text() if self.edit_host.text() != "" else self.PLACEHOLDER_HOST
+        port = self.edit_port.text() if self.edit_port.text() != "" else self.PLACEHOLDER_PORT
 
         result_text = f"Connecting to Database: {database}\nUser: {user}\nPassword: {password}\nHost: {host}\nPort: {port}"
         self.lbl_result.setText(result_text)
