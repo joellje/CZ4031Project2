@@ -4,7 +4,7 @@ import sys
 import psycopg2
 from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
                              QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
-                             QWidget)
+                             QWidget, QSizePolicy)
 
 from explore import DatabaseConnection, Node
 
@@ -52,7 +52,8 @@ class DatabaseInputForm(QWidget):
         self.btn_connect.clicked.connect(self.connect_to_database)
         self.quit_button = QPushButton("Quit", self)
         self.quit_button.clicked.connect(self.close_application)
-
+        
+        
         # Set up the layout
         layout = QVBoxLayout()
         layout.addWidget(self.lbl_heading)
@@ -90,6 +91,11 @@ class DatabaseInputForm(QWidget):
         self.lbl_result.setText(result_text)
 
         try:
+            database = 'postgres'
+            user = 'postgres'
+            host = '0.0.0.0'
+            port = '5432'
+            password = 'postgres'
             con = DatabaseConnection(host, user, password, database, port)
             self.lbl_result.setText(
                 f"Connected to database: {database}@{host}:{port}"
@@ -121,9 +127,10 @@ class QueryInputForm(QWidget):
         self.lbl_details = QLabel(
             f"Querying database: {self._con.connection_url()}"
         )
-
+        self.x = "Blocks Explored"
         self.lbl_queryplantext = QLabel("Query Plan (Text):")
         self.lbl_queryplanvisual = QLabel("Query Plan (Visual):")
+        self.lbl_block_explore = QLabel(self.x)
 
         self.query_input = QTextEdit()
         self.query_input.setAcceptRichText(False)
@@ -142,6 +149,14 @@ class QueryInputForm(QWidget):
         self.quit_button = QPushButton("Quit", self)
         self.quit_button.clicked.connect(self.close_application)
 
+        #block button and browser initiator
+        self.block_buttons_layout = QVBoxLayout()
+        self.block_buttons_scroll_area = QScrollArea()
+        self.block_buttons_scroll_area.setWidgetResizable(True)
+        self.block_buttons_scroll_area.setWidget(QWidget())
+        self.block_buttons_scroll_area.widget().setLayout(self.block_buttons_layout)
+        self.block_content_view = QTextBrowser()
+
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.lbl_result)
@@ -154,6 +169,9 @@ class QueryInputForm(QWidget):
         self.layout.addWidget(self.lbl_queryplantext)
         self.layout.addWidget(self.scroll_area)
         self.layout.addWidget(self.lbl_queryplanvisual)
+        self.layout.addWidget(self.lbl_block_explore)
+        self.layout.addWidget(self.block_buttons_scroll_area)
+        self.layout.addWidget(self.block_content_view)
         self.layout.addWidget(self.quit_button)
 
         self.setLayout(self.layout)
@@ -167,6 +185,7 @@ class QueryInputForm(QWidget):
         QApplication.quit()
 
     def execute_query(self, query):
+        blocks_accessed = {}
         try:
             self.lbl_result.setPlainText(f"Getting query plan...")
             print("Getting QEP for: " + query)
@@ -178,10 +197,11 @@ class QueryInputForm(QWidget):
             execution_time = qep.execution_time
             root = qep.root
             blocks_accessed = qep.blocks_accessed
-
+            x = 0
             for relation, block_ids in blocks_accessed.items():
                 print(f"Relation: {relation}")
                 for id in block_ids:
+                    x += 1
                     block_contents = self._con.get_block_contents(
                         id, relation
                     )
@@ -189,8 +209,33 @@ class QueryInputForm(QWidget):
                         print(
                             f"block id: {id} - {tuple}"
                         )  # TODO: display tuple nicely
+            # Update the UI to display block buttons
+            self.lbl_block_explore.setText(f'Blocks Explored: {x}')
+            self.display_block_buttons(qep.blocks_accessed)
 
         except Exception as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
+    def display_block_buttons(self, blocks_accessed):
+        # Remove all the buttons when you put in new ones
+        for i in reversed(range(self.block_buttons_layout.count())):
+            widgetToRemove = self.block_buttons_layout.itemAt(i).widget()
+            if widgetToRemove:
+                widgetToRemove.setParent(None)
+
+        # Take in blocks accessed and creates new buttons
+        for relation, block_ids in blocks_accessed.items():
+            for block_id in block_ids:
+                button = QPushButton(f"Block ID: {block_id} - Relation: {relation}")
+                button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+                button.clicked.connect(lambda _, b=block_id, r=relation: self.show_block_contents(b, r))
+                self.block_buttons_layout.addWidget(button)
+    def show_block_contents(self, block_id, relation):
+        # show the content
+        block_contents = self._con.get_block_contents(block_id, relation)
+        # Update
+        res = ""
+        for i in block_contents:
+            res += str(i) + '\n'
+        self.block_content_view.setPlainText(f"Block ID: {block_id} - Relation: {relation} \n {res}")
