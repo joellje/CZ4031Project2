@@ -161,8 +161,13 @@ class QueryInputForm(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.lbl_result)
 
+        #button to reset
+        self.new_transact_btn = QPushButton("New Transaction", self)
+        self.new_transact_btn.clicked.connect(self.startNewTransact)
+
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.lbl_heading)
+        self.layout.addWidget(self.new_transact_btn)
         self.layout.addWidget(self.lbl_details)
         self.layout.addWidget(self.query_input)
         self.layout.addWidget(self.execute_button)
@@ -212,7 +217,10 @@ class QueryInputForm(QWidget):
             # Update the UI to display block buttons
             self.lbl_block_explore.setText(f'Blocks Explored: {x}')
             self.display_block_buttons(qep.blocks_accessed)
-
+        except psycopg2.errors.InFailedSqlTransaction as e:
+            self.lbl_result.setPlainText(
+                f"Failed to execute the query. Error: {e}. Start a new transaction to continue querying."
+            )
         except Exception as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
@@ -239,3 +247,17 @@ class QueryInputForm(QWidget):
         for i in block_contents:
             res += str(i) + '\n'
         self.block_content_view.setPlainText(f"Block ID: {block_id} - Relation: {relation} \n {res}")
+    def startNewTransact(self):
+        self.lbl_result.clear()
+        database = 'postgres'
+        user = 'postgres'
+        host = '0.0.0.0'
+        port = '5432'
+        password = 'postgres'
+        con = DatabaseConnection(host, user, password, database, port)
+        self.lbl_result.setText(
+            f"Connected to database: {database}@{host}:{port}"
+        )
+        new_window = QueryInputForm(con)
+        new_window.show()
+        self.close()
