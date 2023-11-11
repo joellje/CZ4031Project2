@@ -82,8 +82,7 @@ class DatabaseInputForm(QWidget):
     def connect_to_database(self):
         database = self.edit_db.text() if self.edit_db.text() != "" else self.PLACEHOLDER_DB
         user = self.edit_user.text() if self.edit_user.text() != "" else self.PLACEHOLDER_USER
-        password = self.edit_password.text() if self.edit_password.text(
-        ) != "" else self.PLACEHOLDER_PASSWORD
+        password = self.edit_password.text() if self.edit_password.text() != "" else self.PLACEHOLDER_PASSWORD
         host = self.edit_host.text() if self.edit_host.text() != "" else self.PLACEHOLDER_HOST
         port = self.edit_port.text() if self.edit_port.text() != "" else self.PLACEHOLDER_PORT
 
@@ -91,11 +90,6 @@ class DatabaseInputForm(QWidget):
         self.lbl_result.setText(result_text)
 
         try:
-            database = 'postgres'
-            user = 'postgres'
-            host = '0.0.0.0'
-            port = '5432'
-            password = 'postgres'
             con = DatabaseConnection(host, user, password, database, port)
             self.lbl_result.setText(
                 f"Connected to database: {database}@{host}:{port}"
@@ -202,20 +196,7 @@ class QueryInputForm(QWidget):
             execution_time = qep.execution_time
             root = qep.root
             blocks_accessed = qep.blocks_accessed
-            x = 0
-            for relation, block_ids in blocks_accessed.items():
-                print(f"Relation: {relation}")
-                for id in block_ids:
-                    x += 1
-                    block_contents = self._con.get_block_contents(
-                        id, relation
-                    )
-                    for tuple in block_contents:
-                        print(
-                            f"block id: {id} - {tuple}"
-                        )  # TODO: display tuple nicely
-            # Update the UI to display block buttons
-            self.lbl_block_explore.setText(f'Blocks Explored: {x}')
+            self.lbl_block_explore.setText(f'Blocks Explored: {sum(len(blocks) for blocks in blocks_accessed.values())}')
             self.display_block_buttons(qep.blocks_accessed)
         except psycopg2.errors.InFailedSqlTransaction as e:
             self.lbl_result.setPlainText(
@@ -225,6 +206,7 @@ class QueryInputForm(QWidget):
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
+
     def display_block_buttons(self, blocks_accessed):
         # Remove all the buttons when you put in new ones
         for i in reversed(range(self.block_buttons_layout.count())):
@@ -239,6 +221,7 @@ class QueryInputForm(QWidget):
                 button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
                 button.clicked.connect(lambda _, b=block_id, r=relation: self.show_block_contents(b, r))
                 self.block_buttons_layout.addWidget(button)
+
     def show_block_contents(self, block_id, relation):
         # show the content
         block_contents = self._con.get_block_contents(block_id, relation)
@@ -247,17 +230,10 @@ class QueryInputForm(QWidget):
         for i in block_contents:
             res += str(i) + '\n'
         self.block_content_view.setPlainText(f"Block ID: {block_id} - Relation: {relation} \n {res}")
+        
     def startNewTransact(self):
         self.lbl_result.clear()
-        database = 'postgres'
-        user = 'postgres'
-        host = '0.0.0.0'
-        port = '5432'
-        password = 'postgres'
-        con = DatabaseConnection(host, user, password, database, port)
-        self.lbl_result.setText(
-            f"Connected to database: {database}@{host}:{port}"
-        )
-        new_window = QueryInputForm(con)
-        new_window.show()
-        self.close()
+        self._con.reconnect()
+        self.lbl_block_explore.setText("Blocks Explored")
+        self.block_content_view.clear()
+        self.display_block_buttons({})

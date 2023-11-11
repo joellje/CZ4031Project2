@@ -22,10 +22,23 @@ class DatabaseConnection:
         self._user = user
         self._database = database
         self._port = port
+        self._password = password
         self._con = psycopg2.connect(
             database=self._database,
             user=self._user,
-            password=password,
+            password=self._password,
+            host=self._host,
+            port=self._port,
+        )
+
+    def reconnect(self) -> None:
+        """
+        Reconnect to the database
+        """
+        self._con = psycopg2.connect(
+            database=self._database,
+            user=self._user,
+            password=self._password,
             host=self._host,
             port=self._port,
         )
