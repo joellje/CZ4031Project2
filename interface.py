@@ -191,7 +191,7 @@ class QueryInputForm(QWidget):
             qepjson, qep = self._con.get_qep(query)
             self.lbl_result.setPlainText(
                 json.dumps(qepjson, indent=4)
-            )  # displays QEP as JSON
+            )
             planning_time = qep.planning_time
             execution_time = qep.execution_time
             root = qep.root

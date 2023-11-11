@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
+import ast
 
 import psycopg2
 
@@ -148,6 +149,24 @@ class QueryExecutionPlan:
                         root["Relation Name"]
                     )
                 }
+            case "Index Scan":
+                print(root.attributes)
+                relation_name = root["Relation Name"]
+                if "Index Cond" in root.attributes:
+                    index_cond = root["Index Cond"]
+                elif "Filter" in root.attributes:
+                    index_cond = root["Filter"]
+
+                with con._con.cursor() as cursor:
+                    cursor.execute(
+                        f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
+                    )
+                    records = cursor.fetchall()
+                    block_ids = set()
+                    for record in records:
+                        block_id, _ = ast.literal_eval(record[0])
+                        block_ids.add(block_id)
+                    blocks_accessed[relation_name] = block_ids
 
         for child in root.children:
             child_blocks_accessed = self._get_blocks_accessed(child, con)
