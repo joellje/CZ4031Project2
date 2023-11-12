@@ -6,6 +6,10 @@ from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
                              QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
                              QWidget, QSizePolicy)
 
+from igraph import Graph, EdgeSeq
+import plotly.graph_objects as go
+import plotly.offline as plt
+
 from explore import DatabaseConnection, Node
 
 
@@ -52,8 +56,7 @@ class DatabaseInputForm(QWidget):
         self.btn_connect.clicked.connect(self.connect_to_database)
         self.quit_button = QPushButton("Quit", self)
         self.quit_button.clicked.connect(self.close_application)
-        
-        
+
         # Set up the layout
         layout = QVBoxLayout()
         layout.addWidget(self.lbl_heading)
@@ -82,7 +85,8 @@ class DatabaseInputForm(QWidget):
     def connect_to_database(self):
         database = self.edit_db.text() if self.edit_db.text() != "" else self.PLACEHOLDER_DB
         user = self.edit_user.text() if self.edit_user.text() != "" else self.PLACEHOLDER_USER
-        password = self.edit_password.text() if self.edit_password.text() != "" else self.PLACEHOLDER_PASSWORD
+        password = self.edit_password.text() if self.edit_password.text(
+        ) != "" else self.PLACEHOLDER_PASSWORD
         host = self.edit_host.text() if self.edit_host.text() != "" else self.PLACEHOLDER_HOST
         port = self.edit_port.text() if self.edit_port.text() != "" else self.PLACEHOLDER_PORT
 
@@ -122,8 +126,10 @@ class QueryInputForm(QWidget):
             f"Querying database: {self._con.connection_url()}"
         )
         self.x = "Blocks Explored"
-        self.lbl_queryplantext = QLabel("Query Plan (Text):")
-        self.lbl_queryplanvisual = QLabel("Query Plan (Visual):")
+        self.lbl_queryplantext = QLabel("<b>Query Plan (Text):</b>")
+        self.lbl_queryplantree = QLabel("<b>Query Plan (Tree):</b>")
+        self.qeptree_button = QPushButton("View Query Plan Tree - Opens in Browser", self)
+        self.lbl_queryplanblocks = QLabel("<b>Query Plan (Blocks Accessed):</b>")
         self.lbl_block_explore = QLabel(self.x)
 
         self.query_input = QTextEdit()
@@ -140,10 +146,11 @@ class QueryInputForm(QWidget):
         self.execute_button.clicked.connect(
             lambda: self.execute_query(self.query_input.toPlainText())
         )
+        self.qeptree_button.clicked.connect(self.display_qep_tree)
         self.quit_button = QPushButton("Quit", self)
         self.quit_button.clicked.connect(self.close_application)
 
-        #block button and browser initiator
+        # block button and browser initiator
         self.block_buttons_layout = QVBoxLayout()
         self.block_buttons_scroll_area = QScrollArea()
         self.block_buttons_scroll_area.setWidgetResizable(True)
@@ -155,7 +162,7 @@ class QueryInputForm(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.lbl_result)
 
-        #button to reset
+        # button to reset
         self.new_transact_btn = QPushButton("New Transaction", self)
         self.new_transact_btn.clicked.connect(self.startNewTransact)
 
@@ -167,7 +174,9 @@ class QueryInputForm(QWidget):
         self.layout.addWidget(self.execute_button)
         self.layout.addWidget(self.lbl_queryplantext)
         self.layout.addWidget(self.scroll_area)
-        self.layout.addWidget(self.lbl_queryplanvisual)
+        self.layout.addWidget(self.lbl_queryplantree)
+        self.layout.addWidget(self.qeptree_button)
+        self.layout.addWidget(self.lbl_queryplanblocks)
         self.layout.addWidget(self.lbl_block_explore)
         self.layout.addWidget(self.block_buttons_scroll_area)
         self.layout.addWidget(self.block_content_view)
@@ -176,7 +185,7 @@ class QueryInputForm(QWidget):
         self.setLayout(self.layout)
         self.setGeometry(400, 400, 600, 600)
         self.setFixedWidth(1000)
-        self.setFixedHeight(1000)
+        self.setFixedHeight(800)
         self.setWindowTitle("Query Input")
         self.show()
 
@@ -196,7 +205,8 @@ class QueryInputForm(QWidget):
             execution_time = qep.execution_time
             root = qep.root
             blocks_accessed = qep.blocks_accessed
-            self.lbl_block_explore.setText(f'Blocks Explored: {sum(len(blocks) for blocks in blocks_accessed.values())}')
+            self.lbl_block_explore.setText(
+                f'Blocks Explored: {sum(len(blocks) for blocks in blocks_accessed.values())}')
             self.display_block_buttons(qep.blocks_accessed)
         except psycopg2.errors.InFailedSqlTransaction as e:
             self.lbl_result.setPlainText(
@@ -217,9 +227,12 @@ class QueryInputForm(QWidget):
         # Take in blocks accessed and creates new buttons
         for relation, block_ids in blocks_accessed.items():
             for block_id in block_ids:
-                button = QPushButton(f"Block ID: {block_id} - Relation: {relation}")
-                button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-                button.clicked.connect(lambda _, b=block_id, r=relation: self.show_block_contents(b, r))
+                button = QPushButton(
+                    f"Block ID: {block_id} - Relation: {relation}")
+                button.setSizePolicy(
+                    QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+                button.clicked.connect(
+                    lambda _, b=block_id, r=relation: self.show_block_contents(b, r))
                 self.block_buttons_layout.addWidget(button)
 
     def show_block_contents(self, block_id, relation):
@@ -229,11 +242,60 @@ class QueryInputForm(QWidget):
         res = ""
         for i in block_contents:
             res += str(i) + '\n'
-        self.block_content_view.setPlainText(f"Block ID: {block_id} - Relation: {relation} \n {res}")
-        
+        self.block_content_view.setPlainText(
+            f"Block ID: {block_id} - Relation: {relation} \n {res}")
+
     def startNewTransact(self):
         self.lbl_result.clear()
         self._con.reconnect()
         self.lbl_block_explore.setText("Blocks Explored")
         self.block_content_view.clear()
         self.display_block_buttons({})
+
+    def display_qep_tree(self):
+        nr_vertices = 25
+        v_label = list(map(str, range(nr_vertices)))
+        G = Graph.Tree(nr_vertices, 2)  # 2 stands for children number
+        lay = G.layout('rt')
+
+        position = {k: lay[k] for k in range(nr_vertices)}
+        Y = [lay[k][1] for k in range(nr_vertices)]
+        M = max(Y)
+
+        es = EdgeSeq(G)  # sequence of edges
+        E = [e.tuple for e in G.es]  # list of edges
+
+        L = len(position)
+        Xn = [position[k][0] for k in range(L)]
+        Yn = [2*M-position[k][1] for k in range(L)]
+        Xe = []
+        Ye = []
+        for edge in E:
+            Xe += [position[edge[0]][0], position[edge[1]][0], None]
+            Ye += [2*M-position[edge[0]][1], 2*M-position[edge[1]][1], None]
+
+        labels = v_label
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=Xe,
+                                 y=Ye,
+                                 mode='lines',
+                                 line=dict(color='rgb(210,210,210)', width=1),
+                                 hoverinfo='none'
+                                 ))
+        fig.add_trace(go.Scatter(x=Xn,
+                                 y=Yn,
+                                 mode='markers',
+                                 name='bla',
+                                 marker=dict(symbol='circle-dot',
+                                             size=18,
+                                             color='#6175c1',  # '#DB4551',
+                                             line=dict(
+                                                 color='rgb(50,50,50)', width=1)
+                                             ),
+                                 text=labels,
+                                 hoverinfo='text',
+                                 opacity=0.8
+                                 ))
+
+        plt.plot(fig, filename='__plot.html')
