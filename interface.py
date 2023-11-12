@@ -270,7 +270,8 @@ class QEPTree(QWidget):
     def __init__(self, qep):
         super().__init__()
         self.qep = qep
-        print(qep)
+        print(qep.root.node_type)
+        print(qep.root.children)
         self.init_ui()
 
     def init_ui(self):
@@ -292,9 +293,6 @@ class QEPTree(QWidget):
         self.layout.addWidget(self.quit_button)
 
         self.setLayout(self.layout)
-        # self.setGeometry(400, 400, 600, 600)
-        # self.setFixedWidth(1000)
-        # self.setFixedHeight(800)
         self.setWindowTitle("QEP Tree")
         self.show()
 

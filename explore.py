@@ -4,6 +4,7 @@ import dataclasses
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 import ast
+import copy
 
 import psycopg2
 
@@ -76,7 +77,7 @@ class DatabaseConnection:
 
     def get_qep(self, query: str) -> Tuple[Any, QueryExecutionPlan]:
         output = self._query_qep(query)
-        qep = QueryExecutionPlan(output, self)
+        qep = QueryExecutionPlan(copy.deepcopy(output), self)
         return (output, qep)
 
     def get_block_contents(self, block_id: int, relation: str) -> List:
