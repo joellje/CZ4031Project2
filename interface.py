@@ -5,6 +5,7 @@ import psycopg2
 from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
                              QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
                              QWidget, QSizePolicy)
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from igraph import Graph, EdgeSeq
 import plotly.graph_objects as go
@@ -298,4 +299,18 @@ class QueryInputForm(QWidget):
                                  opacity=0.8
                                  ))
 
-        plt.plot(fig, filename='__plot.html')
+        # plt.plot(fig, filename='__plot.html')
+        html = '<html><body>'
+        html += plt.plot(fig, output_type='div', include_plotlyjs='cdn')
+        html += '</body></html>'
+        view = QWebEngineView()
+        view.setHtml(html)
+        new_window = QEPTree(view)
+        new_window.show()
+
+class QEPTree(QWidget):
+    def __init__(self, view):
+        super().__init__()
+        layout = QVBoxLayout()
+        layout.addWidget(view)
+        self.setLayout(layout)
