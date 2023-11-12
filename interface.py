@@ -10,6 +10,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from igraph import Graph, EdgeSeq
 import plotly.graph_objects as go
 import plotly.offline as plt
+from collections import deque
 
 from explore import DatabaseConnection, Node
 
@@ -264,14 +265,12 @@ class QueryInputForm(QWidget):
             new_window = QEPTree(self.qep)
             new_window.show()
         except Exception as e:
-            print(e)
+            print(f"Error displaying QEP tree: {e}")
 
 class QEPTree(QWidget):
     def __init__(self, qep):
         super().__init__()
         self.qep = qep
-        print(qep.root.node_type)
-        print(qep.root.children)
         self.init_ui()
 
     def init_ui(self):
@@ -294,16 +293,67 @@ class QEPTree(QWidget):
 
         self.setLayout(self.layout)
         self.setWindowTitle("QEP Tree")
+        self.setGeometry(500, 500, 600, 600)
+        self.setFixedWidth(1000)
+        # self.setFixedHeight(800)
         self.show()
 
     def generate_fig(self):
-        nr_vertices = 25
-        v_label = list(map(str, range(nr_vertices)))
-        G = Graph.Tree(nr_vertices, 2)  # 2 stands for children number
-        lay = G.layout('rt')
+        # G = Graph.Tree(idCounter, 2)  # 2 stands for children number
+        G = Graph()
+        q = deque([(-1, 0, self.qep.root)]) # add root to graph
+        idCounter = 1
+        labels = []
+        hovertexts = []
 
-        position = {k: lay[k] for k in range(nr_vertices)}
-        Y = [lay[k][1] for k in range(nr_vertices)]
+        hovertext_map = {
+            "Join": ["Join Type"],
+            "Scan": ["Relation Name"],
+            "Hash Join": ["Hash Cond"],
+            "Merge Join": ["Merge Cond"],
+            "Aggregate": ["Strategy"],
+            "Group": ["Filter"],
+            "Sort": ["Sort Key", "Sort Method"],
+            "": ["Startup Cost", "Total Cost", "Plan Rows", "Plan Width"]
+        }
+        label_map = {
+            "Scan": "Relation Name",
+            "Hash Join": "Hash Cond",
+            "Merge Join": "Merge Cond",
+            "Sort": "Sort Key"
+        }
+
+        while q:
+            for _ in range(len(q)): # level order traversal
+                parent, i, cur = q.popleft()
+                G.add_vertex(i)
+
+                label = f"<b>{cur.node_type}</b>"
+                label_parser = lambda x: f"<br>{cur.attributes[x]}" if x in cur.attributes else ""
+                for label_match, attr in label_map.items():
+                    if label_match in cur.node_type:
+                        label += label_parser(attr)
+                labels.append(label)
+
+                hovertext = f"{cur.node_type}<br>-----<br>"
+                hovertext_parser = lambda x: f"{x}: {cur.attributes[x]}<br>" if x in cur.attributes else ""
+                for node_match, attributes in hovertext_map.items():
+                    if node_match in cur.node_type:
+                        for attr in attributes:
+                            hovertext += hovertext_parser(attr)
+                hovertexts.append(hovertext)
+
+                if parent != -1:
+                    G.add_edge(parent, i)
+                
+                for child in cur.children:
+                    q.append((i, idCounter, child))
+                    idCounter += 1
+
+        lay = G.layout('rt', root=[0])
+
+        position = {k: lay[k] for k in range(idCounter)}
+        Y = [lay[k][1] for k in range(idCounter)]
         M = max(Y)
 
         es = EdgeSeq(G)  # sequence of edges
@@ -318,8 +368,6 @@ class QEPTree(QWidget):
             Xe += [position[edge[0]][0], position[edge[1]][0], None]
             Ye += [2*M-position[edge[0]][1], 2*M-position[edge[1]][1], None]
 
-        labels = v_label
-
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=Xe,
                                  y=Ye,
@@ -329,17 +377,31 @@ class QEPTree(QWidget):
                                  ))
         fig.add_trace(go.Scatter(x=Xn,
                                  y=Yn,
-                                 mode='markers',
-                                 name='bla',
-                                 marker=dict(symbol='circle-dot',
-                                             size=18,
-                                             color='#6175c1',  # '#DB4551',
-                                             line=dict(
-                                                 color='rgb(50,50,50)', width=1)
-                                             ),
+                                 mode='text',
                                  text=labels,
-                                 hoverinfo='text',
-                                 opacity=0.8
+                                 hovertext=hovertexts,
+                                 hoverinfo='text'
                                  ))
+
+        axis = dict(showline=False, # hide axis line, grid, ticklabels and  title
+            zeroline=False,
+            showgrid=False,
+            showticklabels=False,
+        )
+
+        fig.update_layout(
+            font_size=12,
+            showlegend=False,
+            xaxis=axis,
+            yaxis=axis,
+            margin=dict(l=0, r=0, b=0, t=0),
+            hovermode='closest',
+            plot_bgcolor='rgb(248,248,248)',
+            dragmode="pan",
+            margin_pad=10
+        )
+
+        fig.update_yaxes(automargin=True)
+        fig.update_xaxes(automargin=True)
 
         return fig
