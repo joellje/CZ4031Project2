@@ -5,6 +5,7 @@ import psycopg2
 from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
                              QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
                              QWidget, QSizePolicy)
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from igraph import Graph, EdgeSeq
 import plotly.graph_objects as go
@@ -128,7 +129,6 @@ class QueryInputForm(QWidget):
         self.x = "Blocks Explored"
         self.lbl_queryplantext = QLabel("<b>Query Plan (Text):</b>")
         self.lbl_queryplantree = QLabel("<b>Query Plan (Tree):</b>")
-        self.qeptree_button = QPushButton("View Query Plan Tree - Opens in Browser", self)
         self.lbl_queryplanblocks = QLabel("<b>Query Plan (Blocks Accessed):</b>")
         self.lbl_block_explore = QLabel(self.x)
 
@@ -146,7 +146,9 @@ class QueryInputForm(QWidget):
         self.execute_button.clicked.connect(
             lambda: self.execute_query(self.query_input.toPlainText())
         )
+        self.qeptree_button = QPushButton("View Query Plan Tree", self)
         self.qeptree_button.clicked.connect(self.display_qep_tree)
+        self.qeptree_button.setEnabled(False)
         self.quit_button = QPushButton("Quit", self)
         self.quit_button.clicked.connect(self.close_application)
 
@@ -194,6 +196,7 @@ class QueryInputForm(QWidget):
 
     def execute_query(self, query):
         blocks_accessed = {}
+        self.qep = None
         try:
             self.lbl_result.setPlainText(f"Getting query plan...")
             print("Getting QEP for: " + query)
@@ -208,14 +211,18 @@ class QueryInputForm(QWidget):
             self.lbl_block_explore.setText(
                 f'Blocks Explored: {sum(len(blocks) for blocks in blocks_accessed.values())}')
             self.display_block_buttons(qep.blocks_accessed)
+            self.qep = qep
+            self.qeptree_button.setEnabled(True)
         except psycopg2.errors.InFailedSqlTransaction as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}. Start a new transaction to continue querying."
             )
+            self.qeptree_button.setEnabled(False)
         except Exception as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
+            self.qeptree_button.setEnabled(False)
 
     def display_block_buttons(self, blocks_accessed):
         # Remove all the buttons when you put in new ones
@@ -253,6 +260,45 @@ class QueryInputForm(QWidget):
         self.display_block_buttons({})
 
     def display_qep_tree(self):
+        try:
+            new_window = QEPTree(self.qep)
+            new_window.show()
+        except Exception as e:
+            print(e)
+
+class QEPTree(QWidget):
+    def __init__(self, qep):
+        super().__init__()
+        self.qep = qep
+        print(qep)
+        self.init_ui()
+
+    def init_ui(self):
+        self.layout = QVBoxLayout()
+        self.lbl_heading = QLabel("QEP Tree")
+        self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
+        self.layout.addWidget(self.lbl_heading)
+
+        fig = self.generate_fig()
+        html = '<html><body>'
+        html += plt.plot(fig, output_type='div', include_plotlyjs='cdn')
+        html += '</body></html>'
+        self.view = QWebEngineView()
+        self.view.setHtml(html)
+        self.layout.addWidget(self.view)
+
+        self.quit_button = QPushButton("Close QEP Tree", self)
+        self.quit_button.clicked.connect(lambda: self.close())
+        self.layout.addWidget(self.quit_button)
+
+        self.setLayout(self.layout)
+        # self.setGeometry(400, 400, 600, 600)
+        # self.setFixedWidth(1000)
+        # self.setFixedHeight(800)
+        self.setWindowTitle("QEP Tree")
+        self.show()
+
+    def generate_fig(self):
         nr_vertices = 25
         v_label = list(map(str, range(nr_vertices)))
         G = Graph.Tree(nr_vertices, 2)  # 2 stands for children number
@@ -298,4 +344,4 @@ class QueryInputForm(QWidget):
                                  opacity=0.8
                                  ))
 
-        plt.plot(fig, filename='__plot.html')
+        return fig
