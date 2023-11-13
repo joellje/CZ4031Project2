@@ -4,7 +4,7 @@ import sys
 import psycopg2
 from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
                              QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
-                             QWidget, QSizePolicy)
+                             QWidget, QSizePolicy, QComboBox)
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from igraph import Graph, EdgeSeq
@@ -127,11 +127,12 @@ class QueryInputForm(QWidget):
         self.lbl_details = QLabel(
             f"Querying database: {self._con.connection_url()}"
         )
-        self.x = "Blocks Explored"
         self.lbl_queryplantext = QLabel("<b>Query Plan (Text):</b>")
         self.lbl_queryplantree = QLabel("<b>Query Plan (Tree):</b>")
         self.lbl_queryplanblocks = QLabel("<b>Query Plan (Blocks Accessed):</b>")
-        self.lbl_block_explore = QLabel(self.x)
+        self.lbl_block_explore = QLabel("<i>Blocks Explored:</i>")
+        self.lbl_queryplanblocks_relation = QLabel("Choose Relation:")
+        self.lbl_queryplanblocks_block_id = QLabel("Choose Block ID:")
 
         self.query_input = QTextEdit()
         self.query_input.setAcceptRichText(False)
@@ -153,12 +154,7 @@ class QueryInputForm(QWidget):
         self.quit_button = QPushButton("Quit", self)
         self.quit_button.clicked.connect(self.close_application)
 
-        # block button and browser initiator
-        self.block_buttons_layout = QVBoxLayout()
-        self.block_buttons_scroll_area = QScrollArea()
-        self.block_buttons_scroll_area.setWidgetResizable(True)
-        self.block_buttons_scroll_area.setWidget(QWidget())
-        self.block_buttons_scroll_area.widget().setLayout(self.block_buttons_layout)
+        # block browser initiator
         self.block_content_view = QTextBrowser()
 
         self.scroll_area = QScrollArea()
@@ -168,6 +164,14 @@ class QueryInputForm(QWidget):
         # button to reset
         self.new_transact_btn = QPushButton("New Transaction", self)
         self.new_transact_btn.clicked.connect(self.startNewTransact)
+
+        # dropdowns for exploring blocks
+        self.relation_dropdown = QComboBox()
+        self.relation_dropdown.setEnabled(False)
+        self.relation_dropdown.currentTextChanged.connect(lambda relation: self.update_block_id_dropdown(relation))
+        self.block_id_dropdown = QComboBox()
+        self.block_id_dropdown.setEnabled(False)
+        self.block_id_dropdown.currentTextChanged.connect(lambda block_id: self.show_block_contents(block_id))
 
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.lbl_heading)
@@ -181,7 +185,10 @@ class QueryInputForm(QWidget):
         self.layout.addWidget(self.qeptree_button)
         self.layout.addWidget(self.lbl_queryplanblocks)
         self.layout.addWidget(self.lbl_block_explore)
-        self.layout.addWidget(self.block_buttons_scroll_area)
+        self.layout.addWidget(self.lbl_queryplanblocks_relation)
+        self.layout.addWidget(self.relation_dropdown)
+        self.layout.addWidget(self.lbl_queryplanblocks_block_id)
+        self.layout.addWidget(self.block_id_dropdown)
         self.layout.addWidget(self.block_content_view)
         self.layout.addWidget(self.quit_button)
 
@@ -197,6 +204,11 @@ class QueryInputForm(QWidget):
 
     def execute_query(self, query):
         blocks_accessed = {}
+        self.relation_dropdown.clear()
+        self.block_id_dropdown.clear()
+        self.relation_dropdown.setEnabled(False)
+        self.block_id_dropdown.setEnabled(False)
+        self.qeptree_button.setEnabled(False)
         self.qep = None
         try:
             self.lbl_result.setPlainText(f"Getting query plan...")
@@ -208,57 +220,59 @@ class QueryInputForm(QWidget):
             planning_time = qep.planning_time
             execution_time = qep.execution_time
             root = qep.root
-            blocks_accessed = qep.blocks_accessed
+            self.blocks_accessed = qep.blocks_accessed
+
             self.lbl_block_explore.setText(
-                f'Blocks Explored: {sum(len(blocks) for blocks in blocks_accessed.values())}')
-            self.display_block_buttons(qep.blocks_accessed)
+                f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
+            self.update_relation_dropdown()
+            self.relation_dropdown.setEnabled(True)
             self.qep = qep
             self.qeptree_button.setEnabled(True)
         except psycopg2.errors.InFailedSqlTransaction as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}. Start a new transaction to continue querying."
             )
-            self.qeptree_button.setEnabled(False)
         except Exception as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
-            self.qeptree_button.setEnabled(False)
 
-    def display_block_buttons(self, blocks_accessed):
-        # Remove all the buttons when you put in new ones
-        for i in reversed(range(self.block_buttons_layout.count())):
-            widgetToRemove = self.block_buttons_layout.itemAt(i).widget()
-            if widgetToRemove:
-                widgetToRemove.setParent(None)
+    def update_relation_dropdown(self):
+        self.relation_dropdown.clear()
+        self.relation_dropdown.setEnabled(True)
+        self.relation_dropdown.addItems([""] + list(self.blocks_accessed.keys()))
 
-        # Take in blocks accessed and creates new buttons
-        for relation, block_ids in blocks_accessed.items():
-            for block_id in block_ids:
-                button = QPushButton(
-                    f"Block ID: {block_id} - Relation: {relation}")
-                button.setSizePolicy(
-                    QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-                button.clicked.connect(
-                    lambda _, b=block_id, r=relation: self.show_block_contents(b, r))
-                self.block_buttons_layout.addWidget(button)
+    def update_block_id_dropdown(self, relation):
+        self.relation = relation
+        
+        if self.relation == "":
+            self.block_id_dropdown.clear()
+            self.block_id_dropdown.setEnabled(False)
+        else:
+            self.block_id_dropdown.clear()
+            self.block_id_dropdown.setEnabled(True)
+            self.block_id_dropdown.addItems([""] + [str(i) for i in self.blocks_accessed[self.relation]])
 
-    def show_block_contents(self, block_id, relation):
-        # show the content
-        block_contents = self._con.get_block_contents(block_id, relation)
-        # Update
-        res = ""
-        for i in block_contents:
-            res += str(i) + '\n'
-        self.block_content_view.setPlainText(
-            f"Block ID: {block_id} - Relation: {relation} \n {res}")
+    def show_block_contents(self, block_id):
+        self.block_id = block_id
+
+        if self.block_id == "":
+            self.block_content_view.setPlainText("")
+        else:
+            # show the content
+            block_contents = self._con.get_block_contents(self.block_id, self.relation)
+            # Update
+            res = ""
+            for i in block_contents:
+                res += str(i) + '\n'
+            self.block_content_view.setPlainText(
+                f"Block ID: {self.block_id} - Relation: {self.relation} \n {res}")
 
     def startNewTransact(self):
         self.lbl_result.clear()
         self._con.reconnect()
-        self.lbl_block_explore.setText("Blocks Explored")
+        self.lbl_block_explore.setText("<i>Blocks Explored:</i>")
         self.block_content_view.clear()
-        self.display_block_buttons({})
 
     def display_qep_tree(self):
         try:
