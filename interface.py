@@ -326,6 +326,7 @@ class QEPTree(QWidget):
             "Aggregate": ["Strategy"],
             "Group": ["Filter"],
             "Sort": ["Sort Key", "Sort Method"],
+            "Index": ["Index Cond", "Filter"],
             "": ["Startup Cost", "Total Cost", "Plan Rows", "Plan Width"]
         }
         label_map = {
@@ -347,7 +348,7 @@ class QEPTree(QWidget):
                         label += label_parser(attr)
                 labels.append(label)
 
-                hovertext = f"{cur.node_type}<br>-----<br>"
+                hovertext = f"<b><i>{cur.node_type}</i></b><br>"
                 hovertext_parser = lambda x: f"{x}: {cur.attributes[x]}<br>" if x in cur.attributes else ""
                 for node_match, attributes in hovertext_map.items():
                     if node_match in cur.node_type:
