@@ -1,13 +1,14 @@
 # To start database
 
--   Clone repository:
+- Clone repository:
 
 ```
 git clone https://github.com/joellje/CZ4031Project2.git
 ```
 
--   Copy csv files into ./db/data/
--   Run shell script to start DB:
+- Copy csv files into ./db/data/
+- Install Docker from https://docs.docker.com/engine/install/
+- Run shell script to start DB:
 
 ```
 cd scripts
@@ -16,7 +17,7 @@ cd scripts
 
 # To run GUI
 
--   Create a new Python virtual environment:
+- Create a new Python virtual environment:
 
 ```
 python -m venv venv (Mac)
@@ -24,7 +25,7 @@ python -m venv venv (Mac)
 py -m venv venv (Windows 11)
 ```
 
--   Start virtual environment manually by running:
+- Start virtual environment manually by running:
 
 ```
 source venv/bin/activate (Mac)
@@ -32,6 +33,6 @@ source venv/bin/activate (Mac)
 .\venv\Scripts\activate (Windows 11)
 ```
 
--   Install Python requirements in the project repository: `pip install -r requirements.txt`
+- Install Python requirements in the project repository: `pip install -r requirements.txt`
 
--   Run GUI: `python project.py` (Make sure that you minimally have Python 3.10 installed.)
+- Run GUI: `python project.py` (Make sure that you minimally have Python 3.10 installed.)
