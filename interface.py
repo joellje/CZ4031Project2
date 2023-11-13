@@ -161,10 +161,6 @@ class QueryInputForm(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.lbl_result)
 
-        # button to reset
-        self.new_transact_btn = QPushButton("New Transaction", self)
-        self.new_transact_btn.clicked.connect(self.startNewTransact)
-
         # dropdowns for exploring blocks
         self.relation_dropdown = QComboBox()
         self.relation_dropdown.setEnabled(False)
@@ -175,7 +171,6 @@ class QueryInputForm(QWidget):
 
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.lbl_heading)
-        self.layout.addWidget(self.new_transact_btn)
         self.layout.addWidget(self.lbl_details)
         self.layout.addWidget(self.query_input)
         self.layout.addWidget(self.execute_button)
@@ -203,6 +198,15 @@ class QueryInputForm(QWidget):
         QApplication.quit()
 
     def execute_query(self, query):
+        self.lbl_result.clear()
+        self._con.reconnect()
+        self.lbl_block_explore.setText("<i>Blocks Explored:</i>")
+        self.relation_dropdown.clear()
+        self.relation_dropdown.setEnabled(False)
+        self.block_id_dropdown.clear()
+        self.block_id_dropdown.setEnabled(False)
+        self.block_content_view.clear()
+
         blocks_accessed = {}
         self.relation_dropdown.clear()
         self.block_id_dropdown.clear()
@@ -267,12 +271,6 @@ class QueryInputForm(QWidget):
                 res += str(i) + '\n'
             self.block_content_view.setPlainText(
                 f"Block ID: {self.block_id} - Relation: {self.relation} \n {res}")
-
-    def startNewTransact(self):
-        self.lbl_result.clear()
-        self._con.reconnect()
-        self.lbl_block_explore.setText("<i>Blocks Explored:</i>")
-        self.block_content_view.clear()
 
     def display_qep_tree(self):
         try:
