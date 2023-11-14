@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import dataclasses
-from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Tuple
 import ast
 import copy
+import dataclasses
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg2
+from igraph.configuration import init
 
 PLANNING_TIME = "Planning Time"
 EXECUTION_TIME = "Execution Time"
@@ -132,9 +132,9 @@ class QueryExecutionPlan:
         node_type = plan.pop("Node Type")
         children = plan.pop("Plans", None)
         self.root = Node(
-            node_type,
-            children,
-            **plan,
+            node_type=node_type,
+            children_plans=children,
+            attributes=plan,
         )
         self.blocks_accessed = self._get_blocks_accessed(self.root, con)
 
@@ -152,22 +152,22 @@ class QueryExecutionPlan:
                 }
             case "Index Scan":
                 print(root.attributes)
-                # relation_name = root["Relation Name"]
-                # if "Index Cond" in root.attributes:
-                #     index_cond = root["Index Cond"]
-                # elif "Filter" in root.attributes:
-                #     index_cond = root["Filter"]
+                relation_name = root["Relation Name"]
+                if "Index Cond" in root.attributes:
+                    index_cond = root["Index Cond"]
+                elif "Filter" in root.attributes:
+                    index_cond = root["Filter"]
 
-                # with con._con.cursor() as cursor:
-                #     cursor.execute(
-                #         f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
-                #     )
-                #     records = cursor.fetchall()
-                #     block_ids = set()
-                #     for record in records:
-                #         block_id, _ = ast.literal_eval(record[0])
-                #         block_ids.add(block_id)
-                #     blocks_accessed[relation_name] = block_ids
+                with con._con.cursor() as cursor:
+                    cursor.execute(
+                        f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
+                    )
+                    records = cursor.fetchall()
+                    block_ids = set()
+                    for record in records:
+                        block_id, _ = ast.literal_eval(record[0])
+                        block_ids.add(block_id)
+                    blocks_accessed[relation_name] = block_ids
 
         for child in root.children:
             child_blocks_accessed = self._get_blocks_accessed(child, con)
@@ -180,28 +180,30 @@ class QueryExecutionPlan:
         return blocks_accessed
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(kw_only=True)
 class Node:
     """
     Defines a node in a query execution plan
     """
 
-    def __init__(
+    node_type: str
+    attributes: Dict[str, Any]
+    children: List[Node] = dataclasses.field(init=False, repr=False)
+    children_plans: dataclasses.InitVar[List[Any] | None]
+
+    def __post_init__(
         self,
-        node_type: str,
-        children: Optional[List[Dict[str, Any]]],
+        children_plans: Optional[List[Dict[str, Any]]],
         **kwargs,
     ):
-        self.node_type = node_type
-        self.attributes = kwargs
-        if children is not None:
+        if children_plans is not None:
             self.children = [
                 Node(
-                    child.pop("Node Type"),
-                    child.pop("Plans", None),
-                    **child,
+                    node_type=child.pop("Node Type"),
+                    children_plans=child.pop("Plans", None),
+                    attributes=child,
                 )
-                for child in children
+                for child in children_plans
             ]
         else:
             self.children = []
