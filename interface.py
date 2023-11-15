@@ -145,7 +145,52 @@ class QueryInputForm(QWidget):
                 JOIN part p ON ps.ps_partkey = p.p_partkey
                 WHERE p.p_size > 100
                     AND s.s_nationkey IN (SELECT n_nationkey FROM nation WHERE n_regionkey = 3)
-                GROUP BY s_name;"""
+                GROUP BY s_name;""",
+            6: """SELECT
+                s_acctbal,
+                s_name,
+                n_name,
+                p_partkey,
+                p_mfgr,
+                s_address,
+                s_phone,
+                s_comment
+            FROM part, supplier, partsupp, nation, region
+            WHERE
+                p_partkey = ps_partkey
+                AND s_suppkey = ps_suppkey
+                AND p_size = 15
+                AND p_type LIKE '%BRASS'
+                AND s_nationkey = n_nationkey
+                AND n_regionkey = r_regionkey
+                AND r_name = 'EUROPE'
+                AND ps_supplycost = (
+                    SELECT
+                        MIN(ps_supplycost)
+                    FROM
+                        partsupp,
+                        supplier,
+                        nation,
+                        region
+                    WHERE
+                        p_partkey = ps_partkey
+                        AND s_suppkey = ps_suppkey
+                        AND s_nationkey = n_nationkey
+                        AND n_regionkey = r_regionkey
+                        AND r_name = 'EUROPE'
+                )
+            ORDER BY s_acctbal DESC, n_name, s_name, p_partkey""",
+            7: """SELECT * FROM customer WHERE c_mktsegment = 'Clothing';""",
+            8: """SELECT p_type, AVG(l_quantity) AS avg_quantity
+                FROM lineitem l
+                JOIN part p ON l.l_partkey = p.p_partkey
+                GROUP BY p_type;""",
+            9: """SELECT n_name, COUNT(c_custkey) AS customer_count
+                FROM nation n
+                LEFT JOIN customer c ON n.n_nationkey = c.c_nationkey
+                GROUP BY n_name
+                ORDER BY customer_count DESC
+                LIMIT 5"""
         }
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")

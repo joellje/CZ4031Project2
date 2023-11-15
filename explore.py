@@ -4,6 +4,7 @@ import ast
 import copy
 import dataclasses
 from typing import Any, Dict, List, Optional, Set, Tuple
+import re
 
 import psycopg2
 from igraph.configuration import init
@@ -150,24 +151,43 @@ class QueryExecutionPlan:
                         root["Relation Name"]
                     )
                 }
-            # case "Index Scan":
-            #     print(root.attributes)
-            #     relation_name = root["Relation Name"]
-            #     if "Index Cond" in root.attributes:
-            #         index_cond = root["Index Cond"]
-            #     elif "Filter" in root.attributes:
-            #         index_cond = root["Filter"]
+            case "Index Scan":
+                print(root.attributes)
+                relation_name = root["Relation Name"]
+                alias = root["Alias"]
+                if "Index Cond" in root.attributes:
+                    index_cond = root["Index Cond"]
+                if "Filter" in root.attributes:
+                    index_cond = root["Filter"]
+                print(index_cond)
+                new_query = f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
 
-            #     with con._con.cursor() as cursor:
-            #         cursor.execute(
-            #             f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
-            #         )
-            #         records = cursor.fetchall()
-            #         block_ids = set()
-            #         for record in records:
-            #             block_id, _ = ast.literal_eval(record[0])
-            #             block_ids.add(block_id)
-            #         blocks_accessed[relation_name] = block_ids
+                if relation_name == alias:
+                    with con._con.cursor() as cursor:
+                        cursor.execute(new_query)
+                        records = cursor.fetchall()
+                        block_ids = set()
+                        for record in records:
+                            block_id, _ = ast.literal_eval(record[0])
+                            block_ids.add(block_id)
+                        blocks_accessed[relation_name] = block_ids
+
+                # print(index_cond)
+                # where_matches = re.findall(r'\b(\w+)\.\w+\b', index_cond, re.IGNORECASE)
+                # print(where_matches)
+
+                # if len(where_matches) > 1:
+                #     new_query = f"SELECT ctid, * FROM {where_matches[0]} CROSS JOIN {where_matches[1]} WHERE{index_cond}"
+                # else:
+                #     new_query = f"SELECT ctid, * FROM {relation_name} WHERE{index_cond}"
+                # with con._con.cursor() as cursor:
+                #     cursor.execute(new_query)
+                #     records = cursor.fetchall()
+                #     block_ids = set()
+                #     for record in records:
+                #         block_id, _ = ast.literal_eval(record[0])
+                #         block_ids.add(block_id)
+                #     blocks_accessed[relation_name] = block_ids
 
         for child in root.children:
             child_blocks_accessed = self._get_blocks_accessed(child, con)
