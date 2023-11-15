@@ -350,8 +350,11 @@ class QueryInputForm(QWidget):
             block_contents = self._con.get_block_contents(self.block_id, self.relation)
             # Update
             res = ""
+            x = 1
             for i in block_contents:
-                res += str(i) + '\n'
+                res += '=========================================\n\n'
+                res += f'Row {x}: ' + str(i) + '\n\n'
+                x += 1
             self.block_content_view.setPlainText(
                 f"Block ID: {self.block_id} - Relation: {self.relation} \n {res}")
 
