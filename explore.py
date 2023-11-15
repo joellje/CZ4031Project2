@@ -127,6 +127,16 @@ class QueryExecutionPlan:
         Args:
             plan: query execution plan an a dictionary
         """
+        self.table_map = {
+            'ps' : 'partsupp',
+            'l':'lineitem',
+            'n' : 'nation',
+            'o': 'orders',
+            'p': 'part',
+            'r': 'region',
+            's': 'supplier'
+        }
+        self.table_map_reverse = {self.table_map[i]: i for i in self.table_map}
         self.planning_time = plan[PLANNING_TIME]
         self.execution_time = plan[EXECUTION_TIME]
         plan = plan["Plan"]
@@ -143,6 +153,7 @@ class QueryExecutionPlan:
         self, root: Node, con: DatabaseConnection
     ) -> Dict[str, Set[int]]:
         blocks_accessed = dict()
+        print(root.node_type)
         match root.node_type:
             case "Seq Scan" | "Parallel Seq Scan":
                 blocks_accessed[root["Relation Name"]] = {
@@ -171,6 +182,64 @@ class QueryExecutionPlan:
                             block_id, _ = ast.literal_eval(record[0])
                             block_ids.add(block_id)
                         blocks_accessed[relation_name] = block_ids
+                else:
+                    for i in self.table_map:
+                        new_query = f"SELECT  {self.table_map_reverse[relation_name]}.ctid, {self.table_map_reverse[self.table_map[i]]}.ctid, * FROM {relation_name} {self.table_map_reverse[relation_name]}, {self.table_map[i]} {self.table_map_reverse[self.table_map[i]]} WHERE {index_cond};"
+                        print(new_query)
+                        try:
+                            with con._con.cursor() as cursor:
+                                cursor.execute(new_query)
+                                records = cursor.fetchall()
+                                block_ids = set()
+                                for record in records:
+                                    block_id, _ = ast.literal_eval(record[0])
+                                    block_ids.add(block_id)
+                                    block_id, _ = ast.literal_eval(record[1])
+                                    block_ids.add(block_id)
+                                blocks_accessed[relation_name] = block_ids
+                            break
+                        except:
+                            print("nah boy")
+                            con.reconnect()
+                            continue
+            case "Index Only Scan":
+                print(root.attributes)
+                relation_name = root["Relation Name"]
+                alias = root["Alias"]
+                if "Index Cond" in root.attributes:
+                    index_cond = root["Index Cond"]
+                if "Filter" in root.attributes:
+                    index_cond = root["Filter"]
+                print(index_cond)
+                new_query = f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
+
+                if relation_name == alias:
+                    with con._con.cursor() as cursor:
+                        cursor.execute(new_query)
+                        records = cursor.fetchall()
+                        block_ids = set()
+                        for record in records:
+                            block_id, _ = ast.literal_eval(record[0])
+                            block_ids.add(block_id)
+                        blocks_accessed[relation_name] = block_ids
+                else:
+                    for i in self.table_map:
+                        new_query = f"SELECT  {self.table_map_reverse[relation_name]}.ctid, {self.table_map_reverse[self.table_map[i]]}.ctid, * FROM {relation_name} {self.table_map_reverse[relation_name]}, {self.table_map[i]} {self.table_map_reverse[self.table_map[i]]} WHERE {index_cond};"
+                        print(new_query)
+                        try:
+                            with con._con.cursor() as cursor:
+                                cursor.execute(new_query)
+                                records = cursor.fetchall()
+                                block_ids = set()
+                                for record in records:
+                                    block_id, _ = ast.literal_eval(record[0])
+                                    block_ids.add(block_id)
+                                blocks_accessed[relation_name] = block_ids
+                            break
+                        except:
+                            con.reconnect()
+                            continue
+            
 
                 # print(index_cond)
                 # where_matches = re.findall(r'\b(\w+)\.\w+\b', index_cond, re.IGNORECASE)
