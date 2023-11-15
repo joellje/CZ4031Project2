@@ -121,6 +121,32 @@ class QueryInputForm(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        self.sample_queries = {
+            1: "SELECT c_name, c_address FROM customer;",
+            2: """SELECT o_orderkey, o_totalprice
+                FROM orders o
+                JOIN customer c ON o.o_custkey = c.c_custkey
+                WHERE c.c_mktsegment = 'Electronics';""",
+            3: """SELECT p_name, SUM(l_quantity) AS total_quantity, SUM(l_extendedprice) AS total_extendedprice
+                FROM lineitem l
+                JOIN part p ON l.l_partkey = p.p_partkey
+                WHERE p.p_container = 'Small'
+                GROUP BY p_name;""",
+            4: """SELECT c_name
+                FROM customer
+                WHERE c_custkey IN (
+                    SELECT o_custkey
+                    FROM orders
+                    WHERE o_totalprice > (SELECT AVG(o_totalprice) FROM orders)
+                );""",
+            5: """SELECT s_name, SUM(s_acctbal) AS total_balance
+                FROM supplier s
+                JOIN partsupp ps ON s.s_suppkey = ps.ps_suppkey
+                JOIN part p ON ps.ps_partkey = p.p_partkey
+                WHERE p.p_size > 100
+                    AND s.s_nationkey IN (SELECT n_nationkey FROM nation WHERE n_regionkey = 3)
+                GROUP BY s_name;"""
+        }
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
 
@@ -133,6 +159,12 @@ class QueryInputForm(QWidget):
         self.lbl_block_explore = QLabel("<i>Blocks Explored:</i>")
         self.lbl_queryplanblocks_relation = QLabel("Choose Relation:")
         self.lbl_queryplanblocks_block_id = QLabel("Choose Block ID:")
+        self.lbl_sample_queries = QLabel("Select a sample query: ")
+
+        self.sample_input = QComboBox()
+        self.sample_input.addItems([''])
+        self.sample_input.addItems([f'Sample {i}' for i in self.sample_queries])
+        self.sample_input.currentIndexChanged.connect(self.update_query_field)
 
         self.query_input = QTextEdit()
         self.query_input.setAcceptRichText(False)
@@ -172,6 +204,8 @@ class QueryInputForm(QWidget):
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.lbl_heading)
         self.layout.addWidget(self.lbl_details)
+        self.layout.addWidget(self.lbl_sample_queries)
+        self.layout.addWidget(self.sample_input)
         self.layout.addWidget(self.query_input)
         self.layout.addWidget(self.execute_button)
         self.layout.addWidget(self.lbl_queryplantext)
@@ -193,6 +227,10 @@ class QueryInputForm(QWidget):
         self.setFixedHeight(800)
         self.setWindowTitle("Query Input")
         self.show()
+
+    def update_query_field(self):
+        selected_sample = self.sample_queries[self.sample_input.currentIndex()]
+        self.query_input.setPlainText(selected_sample)
 
     def close_application(self):
         QApplication.quit()
