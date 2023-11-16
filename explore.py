@@ -363,6 +363,12 @@ class QueryExecutionPlan:
                     root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
+            case "Gather Merge" | "Gather" | "Hash" | "Materialize":
+                # These nodes do not alter the table, we can create a view that
+                # is the same as the child
+                con.create_view(
+                    root.node_id, build_select(root.children[0].node_id, [])
+                )
 
         self._merge_blocks_accessed(blocks_accessed)
 
