@@ -207,8 +207,7 @@ class QueryInputForm(QWidget):
         self.lbl_sample_queries = QLabel("Select a sample query: ")
 
         self.sample_input = QComboBox()
-        self.sample_input.addItems([''])
-        self.sample_input.addItems([f'Sample {i}' for i in self.sample_queries])
+        self.sample_input.addItems([''] + [f'Sample {i}' for i in self.sample_queries])
         self.sample_input.currentIndexChanged.connect(self.update_query_field)
 
         self.query_input = QTextEdit()
@@ -274,8 +273,10 @@ class QueryInputForm(QWidget):
         self.show()
 
     def update_query_field(self):
-        selected_sample = self.sample_queries[self.sample_input.currentIndex()]
-        self.query_input.setPlainText(selected_sample)
+        if self.sample_input.currentIndex() == 0:
+            self.query_input.setPlainText("")
+        else:
+            self.query_input.setPlainText(self.sample_queries[self.sample_input.currentIndex()])
 
     def close_application(self):
         QApplication.quit()
@@ -315,10 +316,6 @@ class QueryInputForm(QWidget):
             self.relation_dropdown.setEnabled(True)
             self.qep = qep
             self.qeptree_button.setEnabled(True)
-        except psycopg2.errors.InFailedSqlTransaction as e:
-            self.lbl_result.setPlainText(
-                f"Failed to execute the query. Error: {e}. Start a new transaction to continue querying."
-            )
         except Exception as e:
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
