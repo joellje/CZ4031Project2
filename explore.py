@@ -374,7 +374,7 @@ class QueryExecutionPlan:
                 root.attributes[ALIAS] = child[ALIAS]
                 self.views[child[ALIAS]] = root.node_id
             case _:
-                # for other relations
+                # for other node types
                 pass
 
         self._merge_blocks_accessed(blocks_accessed)
