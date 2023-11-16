@@ -173,11 +173,13 @@ class DatabaseConnection:
         with self._con.cursor() as cursor:
             query = f"SELECT \
                     DISTINCT (ctid::text::point)[0]::bigint as block_id \
-                    FROM {relation_name};"
+                    FROM {relation_name} "
             if condition is not None:
                 query += f"WHERE {condition}"
             cursor.execute(query)
             out = cursor.fetchall()
+            print("-------", query)
+            print(out)
             if out is not None:
                 return out
             else:
@@ -303,15 +305,22 @@ class QueryExecutionPlan:
                     for child in root.children
                     if child["Parent Relationship"] == "Inner"
                 )
+                index_cond = inner["Index Cond"]
                 outer = next(
                     child
                     for child in root.children
                     if child["Parent Relationship"] == "Outer"
                 )
+                aliases = set(
+                        re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
+                    )
+                for alias in aliases:
+                    index_cond.replace(alias, self.views[alias[:-1]])
+
                 join_statement = con.build_join(
-                    self.views[inner["Alias"]],
-                    self.views[outer["Alias"]],
-                    inner["Index Cond"],
+                    inner.node_id,
+                    outer.node_id,
+                    index_cond,
                     root["Join Type"],
                 )
                 con.create_view(root.node_id, join_statement)
@@ -376,28 +385,24 @@ class QueryExecutionPlan:
             case "Index Scan" | "Index Only Scan":
                 index_cond = root["Index Cond"]
                 filter = root["Filter"]
-                is_join = False
-                other_table = None
                 if index_cond is not None:
+
                     aliases = set(
                         re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
                     )
                     for alias in aliases:
                         index_cond.replace(alias, self.views[alias[:-1]])
-
                     if (
-                        re.match(
+                        re.search(
                             r"[a-zA-Z_]+\.?[a-zA-Z_]+ = ([a-zA-Z_]+)\.[a-zA-Z_]+",
                             index_cond,
                         )
                         is not None
                     ):
-                        is_join = True
-                        other_table = re.findall(
-                            r"[a-zA-Z_]+\.?[a-zA-Z_]+ = ([a-zA-Z_]+)\.[a-zA-Z_]+",
-                            index_cond,
-                        )[0]
-
+                        matches = re.search(r"(?P<attr>[a-zA-Z_]+\.?[a-zA-Z_]+) = (?P<table>[a-zA-Z_]+)\.(?P<column>[a-zA-Z_]+)", index_cond)
+                        index_cond = f"{matches.group('attr')} IN (SELECT {matches.group('column')} FROM {self.views[matches.group('table')]})"
+                        root.attributes['Index Cond'] = index_cond   
+                                            
                 if filter is not None:
                     aliases = set(
                         re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", filter)
@@ -410,14 +415,14 @@ class QueryExecutionPlan:
                     blocks_accessed[root["Relation Name"]] = {
                         block_id[0]
                         for block_id in con.get_relation_block_ids(
-                            root["Relation Name"], root["Index Cond"]
+                            root["Relation Name"], index_cond
                         )
                     }
                 con.create_view(
                     root.node_id,
                     con.build_select(
                         root["Relation Name"],
-                        [root["Index Cond"], root["Filter"]],
+                        [index_cond, filter],
                     ),
                 )
                 if root["Alias"] is not None:
