@@ -319,10 +319,10 @@ class QueryInputForm(QWidget):
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}. Start a new transaction to continue querying."
             )
-        except Exception as e:
-            self.lbl_result.setPlainText(
-                f"Failed to execute the query. Error: {e}"
-            )
+        # except Exception as e:
+        #     self.lbl_result.setPlainText(
+        #         f"Failed to execute the query. Error: {e}"
+        #     )
 
     def update_relation_dropdown(self):
         self.relation_dropdown.clear()

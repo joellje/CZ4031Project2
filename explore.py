@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-import ast
 import copy
 import dataclasses
+import logging
+import random
+import string
 from typing import Any, Dict, List, Optional, Set, Tuple
-import re
 
 import psycopg2
-from igraph.configuration import init
 
 PLANNING_TIME = "Planning Time"
 EXECUTION_TIME = "Execution Time"
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseConnection:
@@ -33,6 +35,13 @@ class DatabaseConnection:
             host=self._host,
             port=self._port,
         )
+        self.views: List[str] = []
+        print(f"Established connection to db at {self.connection_url()}")
+
+    def __del__(self):
+        with self._con.cursor() as cursor:
+            for view in self.views:
+                cursor.execute(f"DROP VIEW {view}")
 
     def reconnect(self) -> None:
         """
@@ -102,17 +111,64 @@ class DatabaseConnection:
             else:
                 raise ValueError
 
-    def get_relation_block_ids(self, relation_name: str):
+    def get_relation_block_ids(
+        self, relation_name: str, condition: str | None
+    ):
         with self._con.cursor() as cursor:
-            cursor.execute(
-                f"SELECT DISTINCT (ctid::text::point)[0]::bigint as block_id \
-                FROM {relation_name};"
-            )
+            query = f"SELECT \
+                    DISTINCT (ctid::text::point)[0]::bigint as block_id \
+                    FROM {relation_name};"
+            if condition is not None:
+                query += f"WHERE {condition}"
+            cursor.execute(query)
             out = cursor.fetchall()
             if out is not None:
                 return out
             else:
                 raise ValueError
+
+    def create_view(self, view_name: str, statement: str):
+        view_statement = f"CREATE VIEW {view_name} AS {statement}"
+        print(f"Creating view: {view_statement}")
+        try:
+            with self._con.cursor() as cursor:
+                cursor.execute(view_statement)
+        except Exception as e:
+            print(e)
+            raise e
+
+        self.views.append(view_name)
+
+    def build_select(self, relation: str, conditions: List[str]) -> str:
+        query = f"SELECT * FROM {relation}"
+        conditions = [c for c in conditions if c is not None]
+        if len(conditions) > 0:
+            query += f" WHERE {'AND'.join(conditions)}"
+
+        return query
+
+    def build_join(
+        self,
+        alias_inner: str,
+        alias_outer: str,
+        join_cond: str,
+        join_type: str,
+    ) -> str:
+        match join_type:
+            case "Inner":
+                join_type = "INNER"
+            case "Full":
+                join_type = "FULL OUTER"
+            case "Left":
+                join_type = "LEFT OUTER"
+            case "Right":
+                join_type = "RIGHT OUTER"
+
+        return f"SELECT * \
+                FROM \
+                    {alias_inner} \
+                {join_type} JOIN {alias_outer} on {join_cond} \
+                "
 
 
 class QueryExecutionPlan:
@@ -137,48 +193,118 @@ class QueryExecutionPlan:
             children_plans=children,
             attributes=plan,
         )
-        self.blocks_accessed = self._get_blocks_accessed(self.root, con)
+        # map node in qep to a view in db
+        self.views: Dict[str, str] = dict()
 
-    def _get_blocks_accessed(
-        self, root: Node, con: DatabaseConnection
-    ) -> Dict[str, Set[int]]:
+        self.blocks_accessed = dict()
+        self._get_blocks_accessed(self.root, con)
+
+    def _merge_blocks_accessed(self, blocks_accessed: Dict[str, Set[int]]):
+        for relation, block_ids in blocks_accessed.items():
+            if relation in self.blocks_accessed.keys():
+                self.blocks_accessed[relation].update(block_ids)
+            else:
+                self.blocks_accessed[relation] = block_ids
+
+    def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
+        return
         blocks_accessed = dict()
         match root.node_type:
+            case "Hash" | "Sort" | "Gather Merge" | "Gather":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+            case "Nested Loop":
+                inner = next(
+                    child
+                    for child in root.children
+                    if child["Parent Relationship"] == "Inner"
+                )
+                outer = next(
+                    child
+                    for child in root.children
+                    if child["Parent Relationship"] == "Outer"
+                )
+                self._get_blocks_accessed(inner)
+                
+            case "Hash Join":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+                alias_inner = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Inner"
+                )
+                alias_outer = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Outer"
+                )
+                join_statement = con.build_join(
+                    self.views[alias_inner],
+                    self.views[alias_outer],
+                    root["Hash Cond"]
+                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
+                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
+                    root["Join Type"],
+                )
+                con.create_view(root.node_id, join_statement)
+            case "Merge Join":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+                alias_inner = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Inner"
+                )
+                alias_outer = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Outer"
+                )
+                join_statement = con.build_join(
+                    self.views[alias_inner],
+                    self.views[alias_outer],
+                    root["Merge Cond"]
+                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
+                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
+                    root["Join Type"],
+                )
+                con.create_view(root.node_id, join_statement)
             case "Seq Scan" | "Parallel Seq Scan":
                 blocks_accessed[root["Relation Name"]] = {
                     block_id[0]
                     for block_id in con.get_relation_block_ids(
-                        root["Relation Name"]
+                        root["Relation Name"], None
                     )
                 }
+                con.create_view(
+                    root.node_id,
+                    con.build_select(root["Relation Name"], [root["Filter"]]),
+                )
+                if root["Alias"] is not None:
+                    self.views[root["Alias"]] = root.node_id
             case "Index Scan":
-                print(root.attributes)
-                relation_name = root["Relation Name"]
-                if "Index Cond" in root.attributes:
-                    index_cond = root["Index Cond"]
-                elif "Filter" in root.attributes:
-                    index_cond = root["Filter"]
-
-                with con._con.cursor() as cursor:
-                    cursor.execute(
-                        f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
+                blocks_accessed[root["Relation Name"]] = {
+                    block_id[0]
+                    for block_id in con.get_relation_block_ids(
+                        root["Relation Name"], root["Index Cond"]
                     )
-                    records = cursor.fetchall()
-                    block_ids = set()
-                    for record in records:
-                        block_id, _ = ast.literal_eval(record[0])
-                        block_ids.add(block_id)
-                    blocks_accessed[relation_name] = block_ids
+                }
+                con.create_view(
+                    root.node_id,
+                    con.build_select(
+                        root["Relation Name"],
+                        [root["Index Cond"], root["Filter"]],
+                    ),
+                )
+                if root["Alias"] is not None:
+                    self.views[root["Alias"]] = root.node_id
 
-        for child in root.children:
-            child_blocks_accessed = self._get_blocks_accessed(child, con)
-            for relation, block_ids in child_blocks_accessed.items():
-                if relation in blocks_accessed.keys():
-                    blocks_accessed[relation].update(block_ids)
-                else:
-                    blocks_accessed[relation] = block_ids
+        self._merge_blocks_accessed(blocks_accessed)
 
-        return blocks_accessed
+
+def random_string(N: int = 5) -> str:
+    return "".join(random.choices(string.ascii_uppercase, k=N))
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -187,6 +313,7 @@ class Node:
     Defines a node in a query execution plan
     """
 
+    node_id: str = dataclasses.field(init=False, repr=False)
     node_type: str
     attributes: Dict[str, Any]
     children: List[Node] = dataclasses.field(init=False, repr=False)
@@ -195,8 +322,8 @@ class Node:
     def __post_init__(
         self,
         children_plans: Optional[List[Dict[str, Any]]],
-        **kwargs,
     ):
+        self.node_id = f"{self.node_type.replace(' ', '_')}_{random_string()}"
         if children_plans is not None:
             self.children = [
                 Node(
@@ -208,9 +335,13 @@ class Node:
             ]
         else:
             self.children = []
+        if self.node_type in ("Hash", "Sort", "Gather Merge", "Gather"):
+            self.attributes["Alias"] = self.children[0]["Alias"]
 
-    def __getitem__(self, attr: str):
-        return self.attributes[attr]
+    def __getitem__(self, attr: str) -> Any:
+        if attr in self.attributes.keys():
+            return self.attributes[attr]
+        return None
 
 
 if __name__ == "__main__":
