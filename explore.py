@@ -18,6 +18,7 @@ PLANNING_TIME = "Planning Time"
 EXECUTION_TIME = "Execution Time"
 ALIAS = "Alias"
 PARENT_RELATIONSHIP = "Parent Relationship"
+INDEX_COND = "Index Cond"
 HASH_COND = "Hash Cond"
 MERGE_COND = "Merge Cond"
 JOIN_TYPE = "Join Type"
@@ -366,9 +367,12 @@ class QueryExecutionPlan:
             case "Gather Merge" | "Gather" | "Hash" | "Materialize":
                 # These nodes do not alter the table, we can create a view that
                 # is the same as the child
+                child = root.children[0]
                 con.create_view(
-                    root.node_id, build_select(root.children[0].node_id, [])
+                    root.node_id, build_select(child.node_id, [])
                 )
+                root.attributes[ALIAS] = child[ALIAS]
+                self.views[child[ALIAS]] = root.node_id
 
         self._merge_blocks_accessed(blocks_accessed)
 
@@ -404,8 +408,6 @@ class Node:
             ]
         else:
             self.children = []
-        if self.node_type in ("Hash", "Sort", "Gather Merge", "Gather"):
-            self.attributes[ALIAS] = self.children[0][ALIAS]
 
     def __getitem__(self, attr: str) -> Any:
         """
