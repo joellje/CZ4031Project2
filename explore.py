@@ -4,6 +4,7 @@ import copy
 import dataclasses
 import logging
 import random
+import re
 import string
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -207,13 +208,17 @@ class QueryExecutionPlan:
                 self.blocks_accessed[relation] = block_ids
 
     def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
-        return
         blocks_accessed = dict()
         match root.node_type:
+            case "Aggregate":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
             case "Hash" | "Sort" | "Gather Merge" | "Gather":
                 for child in root.children:
                     self._get_blocks_accessed(child, con)
             case "Nested Loop":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
                 inner = next(
                     child
                     for child in root.children
@@ -224,8 +229,14 @@ class QueryExecutionPlan:
                     for child in root.children
                     if child["Parent Relationship"] == "Outer"
                 )
-                self._get_blocks_accessed(inner)
-                
+                join_statement = con.build_join(
+                    self.views[inner["Alias"]],
+                    self.views[outer["Alias"]],
+                    inner["Index Cond"],
+                    root["Join Type"],
+                )
+                con.create_view(root.node_id, join_statement)
+
             case "Hash Join":
                 for child in root.children:
                     self._get_blocks_accessed(child, con)
@@ -283,13 +294,46 @@ class QueryExecutionPlan:
                 )
                 if root["Alias"] is not None:
                     self.views[root["Alias"]] = root.node_id
-            case "Index Scan":
-                blocks_accessed[root["Relation Name"]] = {
-                    block_id[0]
-                    for block_id in con.get_relation_block_ids(
-                        root["Relation Name"], root["Index Cond"]
+            case "Index Scan" | "Index Only Scan":
+                index_cond = root["Index Cond"]
+                filter = root["Filter"]
+                is_join = False
+                other_table = None
+                if index_cond is not None:
+                    aliases = set(
+                        re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
                     )
-                }
+                    for alias in aliases:
+                        index_cond.replace(alias, self.views[alias[:-1]])
+
+                    if (
+                        re.match(
+                            r"[a-zA-Z_]+\.?[a-zA-Z_]+ = ([a-zA-Z_]+)\.[a-zA-Z_]+",
+                            index_cond,
+                        )
+                        is not None
+                    ):
+                        is_join = True
+                        other_table = re.findall(
+                            r"[a-zA-Z_]+\.?[a-zA-Z_]+ = ([a-zA-Z_]+)\.[a-zA-Z_]+",
+                            index_cond,
+                        )[0]
+
+                if filter is not None:
+                    aliases = set(
+                        re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", filter)
+                    )
+                    for alias in aliases:
+                        filter.replace(alias, self.views[alias[:-1]])
+
+                # SELECT * FROM ps WHERE ps_partkey IN (SELECT p_partkey FROM p)
+                if root.node_type == "Index Scan":
+                    blocks_accessed[root["Relation Name"]] = {
+                        block_id[0]
+                        for block_id in con.get_relation_block_ids(
+                            root["Relation Name"], root["Index Cond"]
+                        )
+                    }
                 con.create_view(
                     root.node_id,
                     con.build_select(
