@@ -364,15 +364,18 @@ class QueryExecutionPlan:
                     root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
-            case "Gather Merge" | "Gather" | "Hash" | "Materialize":
-                # These nodes do not alter the table, we can create a view that
-                # is the same as the child
+            case "Gather Merge" | "Gather" | "Hash" | "Materialize" | "Sort":
+                # These nodes do not alter the tuples of the child view,
+                # we can create a view that is the same as the child
                 child = root.children[0]
                 con.create_view(
                     root.node_id, build_select(child.node_id, [])
                 )
                 root.attributes[ALIAS] = child[ALIAS]
                 self.views[child[ALIAS]] = root.node_id
+            case _:
+                # for other relations
+                pass
 
         self._merge_blocks_accessed(blocks_accessed)
 
