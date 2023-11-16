@@ -35,4 +35,6 @@ source venv/bin/activate (Mac)
 
 - Install Python requirements in the project repository: `pip install -r requirements.txt`
 
+- Ensure you are connected to Internet, because the visualisation of the QEP tree requires connection to an external PyPlot JavaScript file hosted on a CDN.
+
 - Run GUI: `python project.py` (Make sure that you minimally have Python 3.10 installed.)
