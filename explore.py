@@ -186,6 +186,9 @@ class QueryExecutionPlan:
                 self.blocks_accessed[relation] = block_ids
 
     def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
+        for child in root.children:
+            self._get_blocks_accessed(child, con)
+
         blocks_accessed = dict()
         match root.node_type:
             # Scans
@@ -247,8 +250,6 @@ class QueryExecutionPlan:
                     self.views[root[ALIAS]] = root.node_id
             # Joins
             case "Nested Loop" | "Hash Join" | "Merge Join":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
                 inner = get_child_with_attribute(
                     root, PARENT_RELATIONSHIP, "Inner"
                 )
@@ -283,14 +284,6 @@ class QueryExecutionPlan:
                     root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
-
-            # Others
-            case "Aggregate":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-            case "Hash" | "Sort" | "Gather Merge" | "Gather":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
 
         self._merge_blocks_accessed(blocks_accessed)
 
