@@ -233,8 +233,8 @@ class QueryExecutionPlan:
                     if child["Parent Relationship"] == "Outer"
                 )
                 aliases = set(
-                        re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
-                    )
+                    re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
+                )
                 for alias in aliases:
                     index_cond.replace(alias, self.views[alias[:-1]])
 
@@ -307,7 +307,6 @@ class QueryExecutionPlan:
                 index_cond = root["Index Cond"]
                 filter = root["Filter"]
                 if index_cond is not None:
-
                     aliases = set(
                         re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
                     )
@@ -320,10 +319,13 @@ class QueryExecutionPlan:
                         )
                         is not None
                     ):
-                        matches = re.search(r"(?P<attr>[a-zA-Z_]+\.?[a-zA-Z_]+) = (?P<table>[a-zA-Z_]+)\.(?P<column>[a-zA-Z_]+)", index_cond)
+                        matches = re.search(
+                            r"(?P<attr>[a-zA-Z_]+\.?[a-zA-Z_]+) = (?P<table>[a-zA-Z_]+)\.(?P<column>[a-zA-Z_]+)",
+                            index_cond,
+                        )
                         index_cond = f"{matches.group('attr')} IN (SELECT {matches.group('column')} FROM {self.views[matches.group('table')]})"
-                        root.attributes['Index Cond'] = index_cond   
-                                            
+                        root.attributes["Index Cond"] = index_cond
+
                 if filter is not None:
                     aliases = set(
                         re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", filter)
