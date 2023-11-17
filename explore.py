@@ -3,12 +3,12 @@ from __future__ import annotations
 import copy
 import dataclasses
 import logging
-import random
 import re
-import string
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg2
+
+from utils import build_join, build_select, random_string
 
 PLANNING_TIME = "Planning Time"
 EXECUTION_TIME = "Execution Time"
@@ -197,37 +197,6 @@ class DatabaseConnection:
 
         self.views.append(view_name)
 
-    def build_select(self, relation: str, conditions: List[str]) -> str:
-        query = f"SELECT * FROM {relation}"
-        conditions = [c for c in conditions if c is not None]
-        if len(conditions) > 0:
-            query += f" WHERE {'AND'.join(conditions)}"
-
-        return query
-
-    def build_join(
-        self,
-        alias_inner: str,
-        alias_outer: str,
-        join_cond: str,
-        join_type: str,
-    ) -> str:
-        match join_type:
-            case "Inner":
-                join_type = "INNER"
-            case "Full":
-                join_type = "FULL OUTER"
-            case "Left":
-                join_type = "LEFT OUTER"
-            case "Right":
-                join_type = "RIGHT OUTER"
-
-        return f"SELECT * \
-                FROM \
-                    {alias_inner} \
-                {join_type} JOIN {alias_outer} on {join_cond} \
-                "
-
 
 class QueryExecutionPlan:
     """
@@ -291,84 +260,7 @@ class QueryExecutionPlan:
         blocks_accessed = dict()
 
         match root.node_type:
-            case "Aggregate":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-            case "Hash" | "Sort" | "Gather Merge" | "Gather":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-            case "Nested Loop":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-                inner = next(
-                    child
-                    for child in root.children
-                    if child["Parent Relationship"] == "Inner"
-                )
-                index_cond = inner["Index Cond"]
-                outer = next(
-                    child
-                    for child in root.children
-                    if child["Parent Relationship"] == "Outer"
-                )
-                aliases = set(
-                    re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
-                )
-                for alias in aliases:
-                    index_cond.replace(alias, self.views[alias[:-1]])
-
-                join_statement = con.build_join(
-                    inner.node_id,
-                    outer.node_id,
-                    index_cond,
-                    root["Join Type"],
-                )
-                con.create_view(root.node_id, join_statement)
-
-            case "Hash Join":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-                alias_inner = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Inner"
-                )
-                alias_outer = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Outer"
-                )
-                join_statement = con.build_join(
-                    self.views[alias_inner],
-                    self.views[alias_outer],
-                    root["Hash Cond"]
-                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
-                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
-                    root["Join Type"],
-                )
-                con.create_view(root.node_id, join_statement)
-            case "Merge Join":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-                alias_inner = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Inner"
-                )
-                alias_outer = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Outer"
-                )
-                join_statement = con.build_join(
-                    self.views[alias_inner],
-                    self.views[alias_outer],
-                    root["Merge Cond"]
-                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
-                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
-                    root["Join Type"],
-                )
-                con.create_view(root.node_id, join_statement)
+            # Scans
             case "Seq Scan" | "Parallel Seq Scan":
                 blocks_accessed[root["Relation Name"]] = {
                     block_id[0]
@@ -378,7 +270,7 @@ class QueryExecutionPlan:
                 }
                 con.create_view(
                     root.node_id,
-                    con.build_select(root["Relation Name"], [root["Filter"]]),
+                    build_select(root["Relation Name"], [root["Filter"]]),
                 )
                 if root["Alias"] is not None:
                     self.views[root["Alias"]] = root.node_id
@@ -422,19 +314,95 @@ class QueryExecutionPlan:
                     }
                 con.create_view(
                     root.node_id,
-                    con.build_select(
+                    build_select(
                         root["Relation Name"],
                         [index_cond, filter],
                     ),
                 )
                 if root["Alias"] is not None:
                     self.views[root["Alias"]] = root.node_id
+            # Joins
+            case "Nested Loop":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+                inner = next(
+                    child
+                    for child in root.children
+                    if child["Parent Relationship"] == "Inner"
+                )
+                index_cond = inner["Index Cond"]
+                outer = next(
+                    child
+                    for child in root.children
+                    if child["Parent Relationship"] == "Outer"
+                )
+                aliases = set(
+                    re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
+                )
+                for alias in aliases:
+                    index_cond.replace(alias, self.views[alias[:-1]])
+
+                join_statement = build_join(
+                    inner.node_id,
+                    outer.node_id,
+                    index_cond,
+                    root["Join Type"],
+                )
+                con.create_view(root.node_id, join_statement)
+
+            case "Hash Join":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+                alias_inner = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Inner"
+                )
+                alias_outer = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Outer"
+                )
+                join_statement = build_join(
+                    self.views[alias_inner],
+                    self.views[alias_outer],
+                    root["Hash Cond"]
+                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
+                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
+                    root["Join Type"],
+                )
+                con.create_view(root.node_id, join_statement)
+            case "Merge Join":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+                alias_inner = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Inner"
+                )
+                alias_outer = next(
+                    child["Alias"]
+                    for child in root.children
+                    if child["Parent Relationship"] == "Outer"
+                )
+                join_statement = build_join(
+                    self.views[alias_inner],
+                    self.views[alias_outer],
+                    root["Merge Cond"]
+                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
+                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
+                    root["Join Type"],
+                )
+                con.create_view(root.node_id, join_statement)
+            # Others
+            case "Aggregate":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
+            case "Hash" | "Sort" | "Gather Merge" | "Gather":
+                for child in root.children:
+                    self._get_blocks_accessed(child, con)
 
         self._merge_blocks_accessed(blocks_accessed)
-
-
-def random_string(N: int = 5) -> str:
-    return "".join(random.choices(string.ascii_uppercase, k=N))
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -472,12 +440,3 @@ class Node:
         if attr in self.attributes.keys():
             return self.attributes[attr]
         return None
-
-
-if __name__ == "__main__":
-    db_con = DatabaseConnection(
-        "localhost", "postgres", "postgres", "postgres", 5432
-    )
-    _, qep = db_con.get_qep(
-        "SELECT * FROM customer join nation on customer.c_nationkey = nation.n_nationkey;"
-    )
