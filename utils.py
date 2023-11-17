@@ -33,6 +33,7 @@ def build_join(
     relation_outer: str,
     join_cond: str,
     join_type: str,
+    select_cols: List[str] = ["*"]
 ) -> str:
     """
     Build a JOIN query
@@ -60,13 +61,13 @@ def build_join(
             raise ValueError(f"{join_type} is not a valid join type")
 
     if join_cond == "":
-        return f"(SELECT * \
+        return f"(SELECT {','.join(select_cols)} \
                 FROM \
                     {relation_inner} \
                 CROSS JOIN {relation_outer}); \
                 "
     else:
-        return f"SELECT * \
+        return f"SELECT {','.join(select_cols)} \
                 FROM \
                     {relation_inner} \
                 {join_type} JOIN {relation_outer} on {join_cond} \
