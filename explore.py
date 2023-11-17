@@ -232,13 +232,10 @@ class QueryExecutionPlan:
             case "Index Scan":
                 print(root.attributes)
                 relation_name = root["Relation Name"]
-                alias = root["Alias"]
                 if "Index Cond" in root.attributes:
                     index_cond = root["Index Cond"]
-                if "Filter" in root.attributes:
+                elif "Filter" in root.attributes:
                     index_cond = root["Filter"]
-                print(index_cond)
-                new_query = f"SELECT ctid, * FROM {relation_name} WHERE {index_cond};"
 
                 if relation_name == alias:
                     with con._con.cursor() as cursor:
