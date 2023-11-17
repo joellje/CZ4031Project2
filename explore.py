@@ -276,7 +276,7 @@ class QueryExecutionPlan:
 
                 if root.node_type == "Nested Loop":
                     # join condition of Nested Loop is in the inner child
-                    if inner["Index Cond"]:
+                    if inner["Index Cond"] is not None:
                         join_cond = inner["Index Cond"]
                     else:
                         join_cond = ""
@@ -307,7 +307,15 @@ class QueryExecutionPlan:
                 # TODO: error handling
                 inner_cols = con.get_table_col_names(inner.node_id)
                 outer_cols = con.get_table_col_names(outer.node_id)
-                select_cols = list(set().union(inner_cols, outer_cols))
+                select_cols = list(
+                    set(inner_cols).symmetric_difference(outer_cols)
+                )
+                cols_intersect = list(
+                    set().intersection(inner_cols, outer_cols)
+                )
+                select_cols.extend(
+                    [f"{inner.node_id}.{col}" for col in cols_intersect]
+                )
 
                 # TODO: error handling
                 join_statement = build_join(
