@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
                              QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
                              QWidget, QSizePolicy, QComboBox)
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtGui import QFont
+from prettytable import PrettyTable
 
 from igraph import Graph, EdgeSeq
 import plotly.graph_objects as go
@@ -232,6 +234,9 @@ class QueryInputForm(QWidget):
 
         # block browser initiator
         self.block_content_view = QTextBrowser()
+        self.block_content_view.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.block_content_view.horizontalScrollBar().setValue(0)
+        self.block_content_view.setFont(QFont("Courier", 10))
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -343,17 +348,15 @@ class QueryInputForm(QWidget):
         if self.block_id == "":
             self.block_content_view.setPlainText("")
         else:
-            # show the content
+            headers = ["ctid"] + self._con.get_relation_headers(self.relation)
             block_contents = self._con.get_block_contents(self.block_id, self.relation)
-            # Update
-            res = ""
-            x = 1
-            for i in block_contents:
-                res += '=========================================\n\n'
-                res += f'Row {x}: ' + str(i) + '\n\n'
-                x += 1
+
+            table = PrettyTable()
+            table.field_names = headers
+            table.add_rows(block_contents)
+
             self.block_content_view.setPlainText(
-                f"Block ID: {self.block_id} - Relation: {self.relation} \n {res}")
+                f"Block ID: {self.block_id} - Relation: {self.relation}\n{table.get_string()}")
 
     def display_qep_tree(self):
         try:

@@ -81,6 +81,20 @@ class DatabaseConnection:
         qep = QueryExecutionPlan(copy.deepcopy(output), self)
         return (output, qep)
 
+    def get_relation_headers(self, relation: str) -> List:
+        with self._con.cursor() as cursor:
+            cursor.execute(
+                f"SELECT column_name \
+                FROM information_schema.columns \
+                WHERE table_name = '{relation}';"
+            )
+            out = cursor.fetchall()
+            
+            if out:
+                return [i[0] for i in out]
+            else:
+                raise ValueError
+
     def get_block_contents(self, block_id: int, relation: str) -> List:
         """get contents of block with block_id of relation
 
