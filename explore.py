@@ -22,6 +22,7 @@ INDEX_COND = "Index Cond"
 HASH_COND = "Hash Cond"
 MERGE_COND = "Merge Cond"
 JOIN_TYPE = "Join Type"
+SORT_KEY = "Sort Key"
 
 logger = logging.getLogger(__name__)
 
@@ -338,9 +339,7 @@ class QueryExecutionPlan:
                 # we can create a view that is the same as the child
                 child = root.children[0]
                 try:
-                    con.create_view(
-                        root.node_id, build_select(child.node_id, [])
-                    )
+                    con.create_view(root.node_id, build_select(child.node_id))
                     root.attributes[ALIAS] = child[ALIAS]
                     self.views[child[ALIAS]] = root.node_id
                 except psycopg2.errors.UndefinedTable:
@@ -348,6 +347,22 @@ class QueryExecutionPlan:
                     # the node's descendents has a node
                     # that cannot be parsed(eg. aggregate)
                     pass
+            case "Sort":
+                sort_key = root[SORT_KEY]
+                child = root.children[0]
+                con.create_view(
+                    root.node_id, build_select(child.node_id, order=sort_key)
+                )
+                root.attributes[ALIAS] = child[ALIAS]
+                self.views[child[ALIAS]] = root.node_id
+            case "Limit":
+                limit = root["Plan Rows"]
+                child = root.children[0]
+                con.create_view(
+                    root.node_id, build_select(child.node_id, limit=limit)
+                )
+                root.attributes[ALIAS] = child[ALIAS]
+                self.views[child[ALIAS]] = root.node_id
             case _:
                 # for other node types
                 pass
