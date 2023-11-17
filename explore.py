@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg2
 
-from utils import (alter_join_condition, build_join, build_select,
-                   condition_is_join, get_aliases_in_condition,
+from utils import (ViewNotFoundException, alter_join_condition, build_join,
+                   build_select, condition_is_join, get_aliases_in_condition,
                    get_child_with_attribute, random_string,
                    replace_aliases_with_views)
 
@@ -25,6 +25,10 @@ JOIN_TYPE = "Join Type"
 SORT_KEY = "Sort Key"
 
 logger = logging.getLogger(__name__)
+
+
+class UnsupportedQueryException(Exception):
+    pass
 
 
 class DatabaseConnection:
@@ -117,7 +121,8 @@ class DatabaseConnection:
         query (str): the SQL query to be executed
 
         Returns:
-        Tuple[Any, QueryExecutionPlan]: a tuple containing the query execution plan and the QueryExecutionPlan object
+            Tuple[Any, QueryExecutionPlan]: a tuple containing the query
+            execution plan and the QueryExecutionPlan object
         """
         output = self._query_qep(query)
         qep = QueryExecutionPlan(copy.deepcopy(output), self)
@@ -150,11 +155,11 @@ class DatabaseConnection:
     def get_block_contents(self, block_id: int, relation: str) -> List:
         """
         Get the contents of the block with the given block_id in the given relation
-        
+
         Args:
         block_id (int): the block_id of the block
         relation (str): the relation that contains the block
-        
+
         Returns:
         List: a list of tuples with the block_id of the relation
         """
@@ -171,7 +176,9 @@ class DatabaseConnection:
             else:
                 raise ValueError
 
-    def get_relation_block_ids(self, relation_name: str) -> List:
+    def get_relation_block_ids(
+        self, relation_name: str, condition: str | None
+    ):
         """
         Get the block_ids of the given relation
 
@@ -180,7 +187,7 @@ class DatabaseConnection:
 
         Returns:
         List: a list of block_ids of the relation
-		"""
+        """
         with self._con.cursor() as cursor:
             query = f"SELECT \
                     DISTINCT (ctid::text::point)[0]::bigint as block_id \
@@ -255,20 +262,6 @@ class QueryExecutionPlan:
         )
         # map node in qep to a view in db
         self.views: Dict[str, str] = dict()
-
-    def _get_blocks_accessed(
-        self, root: Node, con: DatabaseConnection
-    ) -> Dict[str, Set[int]]:
-        """
-        Returns a dictionary of relation names and the set of block IDs accessed by the given query plan.
-        
-        Args:
-            root (Node): The root node of the query plan.
-            con (DatabaseConnection): The database connection object.
-        
-        Returns:
-            Dict[str, Set[int]]: A dictionary of relation names and the set of block IDs accessed by the given query plan.
-        """
         self.blocks_accessed = dict()
         self._get_blocks_accessed(self.root, con)
 
@@ -280,6 +273,18 @@ class QueryExecutionPlan:
                 self.blocks_accessed[relation] = block_ids
 
     def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
+        """
+        Returns a dictionary of relation names and the set of block IDs
+        accessed by the given query plan.
+
+        Args:
+            root (Node): The root node of the query plan.
+            con (DatabaseConnection): The database connection object.
+
+        Returns:
+            Dict[str, Set[int]]: A dictionary of relation names and the set of
+            block IDs accessed by the given query plan.
+        """
         for child in root.children:
             self._get_blocks_accessed(child, con)
         blocks_accessed = dict()
@@ -294,12 +299,18 @@ class QueryExecutionPlan:
                         root["Relation Name"], None
                     )
                 }
-                con.create_view(
-                    root.node_id,
-                    build_select(root["Relation Name"], [root["Filter"]]),
-                )
-                if root[ALIAS] is not None:
-                    self.views[root[ALIAS]] = root.node_id
+                try:
+                    con.create_view(
+                        root.node_id,
+                        build_select(root["Relation Name"], [root["Filter"]]),
+                    )
+                    if root[ALIAS] is not None:
+                        self.views[root[ALIAS]] = root.node_id
+                # If there is an undefined table when creating view, it means
+                # that it is filtering on a node that cannot be parsed.
+                # In this case, we cannot accurately get the blocks accessed
+                except psycopg2.errors.UndefinedTable:
+                    raise UnsupportedQueryException
 
             case "Index Scan" | "Index Only Scan":
                 index_cond = root["Index Cond"]
@@ -307,14 +318,20 @@ class QueryExecutionPlan:
 
                 # Replace table names in condition with view names
                 if index_cond is not None:
-                    index_cond = replace_aliases_with_views(
-                        index_cond, self.views
-                    )
+                    try:
+                        index_cond = replace_aliases_with_views(
+                            index_cond, self.views
+                        )
+                    # If there is an undefined table when creating view,
+                    # it means that it is filtering on a node that cannot
+                    # be parsed. In this case, we cannot accurately
+                    # get the blocks accessed
+                    except ViewNotFoundException:
+                        raise UnsupportedQueryException
 
                     if condition_is_join(index_cond):
                         # If index condition is a join,
                         # alter the condition for SELECT query to work
-                        # TODO: error handling
                         index_cond = alter_join_condition(index_cond)
 
                 # Replace table names in condition with filter names
@@ -333,15 +350,22 @@ class QueryExecutionPlan:
                             root["Relation Name"], index_cond
                         )
                     }
-                con.create_view(
-                    root.node_id,
-                    build_select(
-                        root["Relation Name"],
-                        [index_cond, filter],
-                    ),
-                )
-                if root[ALIAS] is not None:
-                    self.views[root[ALIAS]] = root.node_id
+                try:
+                    con.create_view(
+                        root.node_id,
+                        build_select(
+                            root["Relation Name"],
+                            [index_cond, filter],
+                        ),
+                    )
+                    if root[ALIAS] is not None:
+                        self.views[root[ALIAS]] = root.node_id
+                # If there is an undefined table when creating view, it means
+                # that it is filtering on a node that cannot be parsed.
+                # In this case, we cannot accurately get the blocks accessed
+                except psycopg2.errors.UndefinedTable:
+                    raise UnsupportedQueryException
+
             # Joins
             case "Nested Loop" | "Hash Join" | "Merge Join":
                 inner = get_child_with_attribute(

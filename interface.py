@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 import plotly.offline as plt
 from collections import deque
 
-from explore import DatabaseConnection, Node
+from explore import DatabaseConnection, Node, UnsupportedQueryException
 
 
 class DatabaseInputForm(QWidget):
@@ -273,7 +273,6 @@ class QueryInputForm(QWidget):
         self.block_id_dropdown.setEnabled(False)
         self.block_content_view.clear()
 
-        blocks_accessed = {}
         self.relation_dropdown.clear()
         self.block_id_dropdown.clear()
         self.relation_dropdown.setEnabled(False)
@@ -281,15 +280,12 @@ class QueryInputForm(QWidget):
         self.qeptree_button.setEnabled(False)
         self.qep = None
         try:
-            self.lbl_result.setPlainText(f"Getting query plan...")
+            self.lbl_result.setPlainText("Getting query plan...")
             print("Getting QEP for: " + query)
             qepjson, qep = self._con.get_qep(query)
             self.lbl_result.setPlainText(
                 json.dumps(qepjson, indent=4)
             )
-            planning_time = qep.planning_time
-            execution_time = qep.execution_time
-            root = qep.root
             self.blocks_accessed = qep.blocks_accessed
 
             self.lbl_block_explore.setText(
@@ -298,8 +294,9 @@ class QueryInputForm(QWidget):
             self.relation_dropdown.setEnabled(True)
             self.qep = qep
             self.qeptree_button.setEnabled(True)
+        except UnsupportedQueryException:
+            pass
         except Exception as e:
-            raise e
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
