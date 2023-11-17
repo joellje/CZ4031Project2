@@ -337,9 +337,17 @@ class QueryExecutionPlan:
                 # These nodes do not alter the tuples of the child view,
                 # we can create a view that is the same as the child
                 child = root.children[0]
-                con.create_view(root.node_id, build_select(child.node_id, []))
-                root.attributes[ALIAS] = child[ALIAS]
-                self.views[child[ALIAS]] = root.node_id
+                try:
+                    con.create_view(
+                        root.node_id, build_select(child.node_id, [])
+                    )
+                    root.attributes[ALIAS] = child[ALIAS]
+                    self.views[child[ALIAS]] = root.node_id
+                except psycopg2.errors.UndefinedTable:
+                    # If the child has no view, it means that
+                    # the node's descendents has a node
+                    # that cannot be parsed(eg. aggregate)
+                    pass
             case _:
                 # for other node types
                 pass
