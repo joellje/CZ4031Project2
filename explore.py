@@ -262,19 +262,25 @@ class QueryExecutionPlan:
         )
         # map node in qep to a view in db
         self.views: Dict[str, str] = dict()
-        self.blocks_accessed = dict()
-        self._get_blocks_accessed(self.root, con)
+        self._blocks_accessed = dict()
+        self._gotten_blocks_accessed = False
 
     def _merge_blocks_accessed(self, blocks_accessed: Dict[str, Set[int]]):
         for relation, block_ids in blocks_accessed.items():
-            if relation in self.blocks_accessed.keys():
-                self.blocks_accessed[relation].update(block_ids)
+            if relation in self._blocks_accessed.keys():
+                self._blocks_accessed[relation].update(block_ids)
             else:
-                self.blocks_accessed[relation] = block_ids
+                self._blocks_accessed[relation] = block_ids
+
+    def get_blocks_accessed(self, con: DatabaseConnection):
+        if self._gotten_blocks_accessed:
+            return self._blocks_accessed
+        self._get_blocks_accessed(self.root, con)
+        return self._blocks_accessed
 
     def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
         """
-        Returns a dictionary of relation names and the set of block IDs
+        Get a dictionary of relation names and the set of block IDs
         accessed by the given query plan.
 
         Args:

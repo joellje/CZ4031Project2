@@ -283,23 +283,27 @@ class QueryInputForm(QWidget):
             self.lbl_result.setPlainText("Getting query plan...")
             print("Getting QEP for: " + query)
             qepjson, qep = self._con.get_qep(query)
+            self.qep = qep
+            self.qeptree_button.setEnabled(True)
+
             self.lbl_result.setPlainText(
                 json.dumps(qepjson, indent=4)
             )
-            self.blocks_accessed = qep.blocks_accessed
+        except Exception as e:
+            self.lbl_result.setPlainText(
+                f"Failed to execute the query. Error: {e}"
+            )
+            return
+        try:
+            self.blocks_accessed = qep.get_blocks_accessed(self._con)
 
             self.lbl_block_explore.setText(
                 f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
-            self.qep = qep
-            self.qeptree_button.setEnabled(True)
         except UnsupportedQueryException:
+            # TODO
             pass
-        except Exception as e:
-            self.lbl_result.setPlainText(
-                f"Failed to execute the query. Error: {e}"
-            )
 
     def update_relation_dropdown(self):
         self.relation_dropdown.clear()
