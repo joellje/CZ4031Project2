@@ -189,8 +189,9 @@ class QueryExecutionPlan:
     def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
         for child in root.children:
             self._get_blocks_accessed(child, con)
-
+        print(root.node_type, " ", root.node_id)
         blocks_accessed = dict()
+
         match root.node_type:
             # Scans
             case "Seq Scan" | "Parallel Seq Scan":
@@ -259,23 +260,44 @@ class QueryExecutionPlan:
                 )
                 # TODO: error handling
                 assert inner is not None and outer is not None
-                print(inner.node_id)
 
                 if root.node_type == "Nested Loop":
                     # join condition of Nested Loop is in the inner child
-                    join_cond = alter_join_condition(
-                        replace_aliases_with_views(
-                            inner["Index Cond"], self.views
+                    if inner["Index Cond"]:
+                        join_cond = alter_join_condition(
+                            replace_aliases_with_views(
+                                inner["Index Cond"], self.views
+                            )
                         )
-                    )
+                    else:
+                        join_cond = ""
                 elif root.node_type == "Hash Join":
-                    join_cond = replace_aliases_with_views(
-                        root[HASH_COND], self.views
-                    )
+                    join_cond = root[HASH_COND]
+                    aliases = re.findall(r"([a-zA-Z_1-9?]+)\.[a-zA-Z_]+", join_cond)
+                    print(join_cond)
+                    print(aliases)
+
+                    children = root.children
+                    for i in range(2):
+                        join_cond = re.sub(rf"{aliases[i]}\.", f"{children[i].node_id}.", join_cond)
+                    # join_cond = replace_aliases_with_views(
+                    #     root[HASH_COND], self.views
+                    # )
+                    print(join_cond)
                 else:
-                    join_cond = replace_aliases_with_views(
-                        root[MERGE_COND], self.views
-                    )
+                    # join_cond = replace_aliases_with_views(
+                    #     root[MERGE_COND], self.views
+                    # )
+                    join_cond = root[MERGE_COND]
+                    aliases = re.findall(r"([a-zA-Z_1-9?]+)\.[a-zA-Z_]+", join_cond)
+
+                    children = root.children
+                    for i in range(2):
+                        join_cond = re.sub(rf"{aliases[i]}\.", f"{children[i].node_id}.", join_cond)
+                    # join_cond = replace_aliases_with_views(
+                    #     root[HASH_COND], self.views
+                    # )
+                    print(join_cond)
 
                 # TODO: error handling
                 join_statement = build_join(
@@ -285,7 +307,7 @@ class QueryExecutionPlan:
                     root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
-            case "Gather Merge" | "Gather" | "Hash" | "Materialize" | "Sort":
+            case "Gather Merge" | "Gather" | "Hash" | "Materialize" | "Sort" | "Aggregate" | "Memoize":
                 # These nodes do not alter the tuples of the child view,
                 # we can create a view that is the same as the child
                 child = root.children[0]
