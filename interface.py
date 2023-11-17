@@ -435,6 +435,7 @@ class QEPTree(QWidget):
                     q.append((i, idCounter, child))
                     idCounter += 1
 
+        # Note: code below referenced from https://plotly.com/python/tree-plots/
         lay = G.layout('rt', root=[0])
 
         position = {k: lay[k] for k in range(idCounter)}
