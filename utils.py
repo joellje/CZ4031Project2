@@ -127,6 +127,8 @@ def replace_aliases_with_views(statement: str, views: Dict[str, str]) -> str:
     """
     aliases = get_aliases_in_condition(statement)
     for alias in aliases:
+        if alias not in views.keys():
+            raise ViewNotFoundException
         statement = re.sub(rf"{alias}\.", f"{views[alias]}.", statement)
     return statement
 
