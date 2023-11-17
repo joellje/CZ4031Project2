@@ -385,7 +385,7 @@ class QueryExecutionPlan:
                     root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
-            case "Gather Merge" | "Gather" | "Hash" | "Materialize" | "Sort" | "Aggregate" | "Memoize":
+            case "Gather Merge" | "Gather" | "Hash" | "Materialize" | "Sort" | "Memoize":
                 # These nodes do not alter the tuples of the child view,
                 # we can create a view that is the same as the child
                 child = root.children[0]
