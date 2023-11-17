@@ -6,7 +6,7 @@
 git clone https://github.com/joellje/CZ4031Project2.git
 ```
 
-- Copy csv files into ./db/data/
+- Copy TPCH csv files into ./db/data/
 - Install Docker from https://docs.docker.com/engine/install/
 - Run shell script to start DB:
 
