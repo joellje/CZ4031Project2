@@ -13,7 +13,7 @@ def build_select(
     relation: str,
     conditions: List[str] = [],
     order: List[str] = [],
-    limit: int = 0,
+    limit: int | None = None,
 ) -> str:
     """
     Build a SELECT query
@@ -33,7 +33,8 @@ def build_select(
         query += f" WHERE {'AND'.join(conditions)}"
     if len(order) > 0:
         query += f" ORDER BY {','.join(order)}"
-    query += f" LIMIT {limit}"
+    if limit is not None:
+        query += f" LIMIT {limit}"
 
     return query
 
