@@ -209,8 +209,18 @@ class QueryExecutionPlan:
     def _get_blocks_accessed(
         self, root: Node, con: DatabaseConnection
     ) -> Dict[str, Set[int]]:
+    	"""
+        Returns a dictionary of relation names and the set of block IDs accessed by the given query plan.
+        
+        Args:
+            root (Node): The root node of the query plan.
+            con (DatabaseConnection): The database connection object.
+        
+        Returns:
+            Dict[str, Set[int]]: A dictionary of relation names and the set of block IDs accessed by the given query plan.
+        """
         blocks_accessed = dict()
-        print(root.node_type)
+
         match root.node_type:
             case "Seq Scan" | "Parallel Seq Scan":
                 blocks_accessed[root["Relation Name"]] = {
@@ -365,4 +375,3 @@ if __name__ == "__main__":
     _, qep = db_con.get_qep(
         "SELECT * FROM customer join nation on customer.c_nationkey = nation.n_nationkey;"
     )
-    # print(qep.blocks_accessed)
