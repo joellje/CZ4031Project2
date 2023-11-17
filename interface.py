@@ -169,7 +169,8 @@ class QueryInputForm(QWidget):
                 GROUP BY n_name
                 ORDER BY customer_count DESC
                 LIMIT 5;""",
-            5: """SELECT supp_nation, cust_nation, SUM(volume) AS revenue FROM      (   SELECT    n1.n_name AS supp_nation,    n2.n_name AS cust_nation,    l_extendedprice * (1 - l_discount) AS volume   FROM    supplier,    lineitem,    orders,    customer,    nation n1,    nation n2   WHERE    s_suppkey = l_suppkey    AND o_orderkey = l_orderkey    AND c_custkey = o_custkey    AND s_nationkey = n1.n_nationkey    AND c_nationkey = n2.n_nationkey    AND (     (n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')     OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')    )      ) AS shipping GROUP BY      supp_nation,      cust_nation ORDER BY      supp_nation,      cust_nation;"""
+            5: """SELECT supp_nation, cust_nation, SUM(volume) AS revenue FROM      (   SELECT    n1.n_name AS supp_nation,    n2.n_name AS cust_nation,    l_extendedprice * (1 - l_discount) AS volume   FROM    supplier,    lineitem,    orders,    customer,    nation n1,    nation n2   WHERE    s_suppkey = l_suppkey    AND o_orderkey = l_orderkey    AND c_custkey = o_custkey    AND s_nationkey = n1.n_nationkey    AND c_nationkey = n2.n_nationkey    AND (     (n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')     OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')    )      ) AS shipping GROUP BY      supp_nation,      cust_nation ORDER BY      supp_nation,      cust_nation;""",
+            6: "SELECT * FROM partsupp where ps_partkey < 30 or ps_suppkey < 20;"
         }
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
@@ -304,7 +305,7 @@ class QueryInputForm(QWidget):
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
         except UnsupportedQueryException:
-            self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: queries with Aggregate in the QEP might not have accurate blocks accessed)")
+            self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: this particular query might not have accurate blocks accessed)")
             self.lbl_block_explore.setText(
                 f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
             self.update_relation_dropdown()
