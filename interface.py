@@ -328,7 +328,7 @@ class QueryInputForm(QWidget):
         else:
             self.block_id_dropdown.clear()
             self.block_id_dropdown.setEnabled(True)
-            self.block_id_dropdown.addItems([""] + [str(i) for i in self.blocks_accessed[self.relation]])
+            self.block_id_dropdown.addItems([""] + sorted([str(i) for i in self.blocks_accessed[self.relation]], key=lambda x: int(x)))
 
     def show_block_contents(self, block_id):
         self.block_id = block_id
