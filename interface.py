@@ -236,7 +236,7 @@ class QueryInputForm(QWidget):
         self.block_content_view = QTextBrowser()
         self.block_content_view.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.block_content_view.horizontalScrollBar().setValue(0)
-        self.block_content_view.setFont(QFont("Courier", 10))
+        self.block_content_view.setFont(QFont("Courier New", 11))
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)

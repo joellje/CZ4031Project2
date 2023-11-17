@@ -209,7 +209,7 @@ class QueryExecutionPlan:
     def _get_blocks_accessed(
         self, root: Node, con: DatabaseConnection
     ) -> Dict[str, Set[int]]:
-    	"""
+        """
         Returns a dictionary of relation names and the set of block IDs accessed by the given query plan.
         
         Args:
