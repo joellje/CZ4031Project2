@@ -380,8 +380,19 @@ class QueryExecutionPlan:
                 outer = get_child_with_attribute(
                     root, PARENT_RELATIONSHIP, "Outer"
                 )
-                # TODO: error handling
-                assert inner is not None and outer is not None
+                # These nodes should have an inner and outer child
+                if inner is None:
+                    raise ValueError(
+                        "Cannot find inner node for node type: {}".format(
+                            root.node_type
+                        )
+                    )
+                if outer is None:
+                    raise ValueError(
+                        "Cannot find outer node for node type: {}".format(
+                            root.node_type
+                        )
+                    )
 
                 if root.node_type == "Nested Loop":
                     # join condition of Nested Loop is in the inner child
@@ -394,26 +405,28 @@ class QueryExecutionPlan:
                 else:
                     join_cond = root[MERGE_COND]
 
-                matches = re.findall(
-                    r"(?P<outer>[a-zA-Z1-9_]+)\.?[a-zA-Z1-9_]+ = "
-                    r"(?P<inner>[a-zA-Z1-9_]+)\.?[a-zA-Z1-9_]+",
-                    join_cond,
-                )
-                if matches is None:
-                    raise ValueError(
-                        f"Unable to find table aliases in join condition: {join_cond}"
+                if join_cond != "":
+                    matches = re.findall(
+                        r"(?P<outer>[a-zA-Z1-9_]+)\.?[a-zA-Z1-9_]+ = "
+                        r"(?P<inner>[a-zA-Z1-9_]+)\.?[a-zA-Z1-9_]+",
+                        join_cond,
                     )
-                for outer_alias, inner_alias in matches:
-                    if root.node_type == "Nested Loop":
-                        outer_alias, inner_alias = inner_alias, outer_alias
-                    join_cond = re.sub(
-                        rf"{inner_alias}\.", f"{inner.node_id}.", join_cond
-                    )
-                    join_cond = re.sub(
-                        rf"{outer_alias}\.", f"{outer.node_id}.", join_cond
-                    )
+                    if matches is None:
+                        raise ValueError(
+                            "Unable to find table aliases in join condition: {}".format(
+                                join_cond
+                            )
+                        )
+                    for outer_alias, inner_alias in matches:
+                        if root.node_type == "Nested Loop":
+                            outer_alias, inner_alias = inner_alias, outer_alias
+                        join_cond = re.sub(
+                            rf"{inner_alias}\.", f"{inner.node_id}.", join_cond
+                        )
+                        join_cond = re.sub(
+                            rf"{outer_alias}\.", f"{outer.node_id}.", join_cond
+                        )
 
-                # TODO: error handling
                 inner_cols = con.get_table_col_names(inner.node_id)
                 outer_cols = con.get_table_col_names(outer.node_id)
                 select_cols = list(
@@ -426,7 +439,6 @@ class QueryExecutionPlan:
                     [f"{inner.node_id}.{col}" for col in cols_intersect]
                 )
 
-                # TODO: error handling
                 join_statement = build_join(
                     inner.node_id,
                     outer.node_id,
