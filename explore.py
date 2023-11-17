@@ -19,6 +19,7 @@ EXECUTION_TIME = "Execution Time"
 ALIAS = "Alias"
 PARENT_RELATIONSHIP = "Parent Relationship"
 INDEX_COND = "Index Cond"
+RECHECK_COND = "Recheck Cond"
 HASH_COND = "Hash Cond"
 MERGE_COND = "Merge Cond"
 JOIN_TYPE = "Join Type"
@@ -318,8 +319,11 @@ class QueryExecutionPlan:
                 except psycopg2.errors.UndefinedTable:
                     raise UnsupportedQueryException
 
-            case "Index Scan" | "Index Only Scan":
+            case "Index Scan" | "Index Only Scan" | "Bitmap Heap Scan":
                 index_cond = root["Index Cond"]
+                if root.node_type == "Bitmap Heap Scan":
+                    index_cond = root[RECHECK_COND]
+
                 filter = root["Filter"]
 
                 # Replace table names in condition with view names
@@ -349,7 +353,10 @@ class QueryExecutionPlan:
                         filter.replace(table, self.views[table[:-1]])
 
                 # Index only scan do not access blocks
-                if root.node_type == "Index Scan":
+                if (
+                    root.node_type == "Index Scan"
+                    or root.node_type == "Bitmap Heap Scan"
+                ):
                     blocks_accessed[root["Relation Name"]] = {
                         block_id[0]
                         for block_id in con.get_relation_block_ids(
