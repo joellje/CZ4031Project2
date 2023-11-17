@@ -1,18 +1,15 @@
 import json
-import sys
+from collections import deque
 
-import psycopg2
-from PyQt6.QtWidgets import (QApplication, QLabel, QLineEdit, QPushButton,
-                             QScrollArea, QTextBrowser, QTextEdit, QVBoxLayout,
-                             QWidget, QSizePolicy, QComboBox)
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtGui import QFont
-from prettytable import PrettyTable
-
-from igraph import Graph, EdgeSeq
 import plotly.graph_objects as go
 import plotly.offline as plt
-from collections import deque
+from igraph import EdgeSeq, Graph
+from prettytable import PrettyTable
+from PyQt6.QtGui import QFont
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWidgets import (QApplication, QComboBox, QLabel, QLineEdit,
+                             QPushButton, QScrollArea, QTextBrowser, QTextEdit,
+                             QVBoxLayout, QWidget)
 
 from explore import DatabaseConnection, Node, UnsupportedQueryException
 
@@ -21,7 +18,9 @@ class DatabaseInputForm(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.PLACEHOLDER_DB = self.PLACEHOLDER_USER = self.PLACEHOLDER_PASSWORD = "postgres"
+        self.PLACEHOLDER_DB = (
+            self.PLACEHOLDER_USER
+        ) = self.PLACEHOLDER_PASSWORD = "postgres"
         self.PLACEHOLDER_HOST = "0.0.0.0"
         self.PLACEHOLDER_PORT = "5432"
 
@@ -87,12 +86,31 @@ class DatabaseInputForm(QWidget):
         self.show()
 
     def connect_to_database(self):
-        database = self.edit_db.text() if self.edit_db.text() != "" else self.PLACEHOLDER_DB
-        user = self.edit_user.text() if self.edit_user.text() != "" else self.PLACEHOLDER_USER
-        password = self.edit_password.text() if self.edit_password.text(
-        ) != "" else self.PLACEHOLDER_PASSWORD
-        host = self.edit_host.text() if self.edit_host.text() != "" else self.PLACEHOLDER_HOST
-        port = self.edit_port.text() if self.edit_port.text() != "" else self.PLACEHOLDER_PORT
+        database = (
+            self.edit_db.text()
+            if self.edit_db.text() != ""
+            else self.PLACEHOLDER_DB
+        )
+        user = (
+            self.edit_user.text()
+            if self.edit_user.text() != ""
+            else self.PLACEHOLDER_USER
+        )
+        password = (
+            self.edit_password.text()
+            if self.edit_password.text() != ""
+            else self.PLACEHOLDER_PASSWORD
+        )
+        host = (
+            self.edit_host.text()
+            if self.edit_host.text() != ""
+            else self.PLACEHOLDER_HOST
+        )
+        port = (
+            self.edit_port.text()
+            if self.edit_port.text() != ""
+            else self.PLACEHOLDER_PORT
+        )
 
         result_text = f"Connecting to Database: {database}\nUser: {user}\nPassword: {password}\nHost: {host}\nPort: {port}"
         self.lbl_result.setText(result_text)
@@ -170,7 +188,7 @@ class QueryInputForm(QWidget):
                 ORDER BY customer_count DESC
                 LIMIT 5;""",
             5: """SELECT supp_nation, cust_nation, SUM(volume) AS revenue FROM      (   SELECT    n1.n_name AS supp_nation,    n2.n_name AS cust_nation,    l_extendedprice * (1 - l_discount) AS volume   FROM    supplier,    lineitem,    orders,    customer,    nation n1,    nation n2   WHERE    s_suppkey = l_suppkey    AND o_orderkey = l_orderkey    AND c_custkey = o_custkey    AND s_nationkey = n1.n_nationkey    AND c_nationkey = n2.n_nationkey    AND (     (n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')     OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')    )      ) AS shipping GROUP BY      supp_nation,      cust_nation ORDER BY      supp_nation,      cust_nation;""",
-            6: "SELECT * FROM partsupp where ps_partkey < 30 or ps_suppkey < 20;"
+            6: "SELECT * FROM partsupp where ps_partkey < 30 or ps_suppkey < 20;",
         }
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
@@ -180,14 +198,18 @@ class QueryInputForm(QWidget):
         )
         self.lbl_queryplantext = QLabel("<b>Query Plan (Text):</b>")
         self.lbl_queryplantree = QLabel("<b>Query Plan (Tree):</b>")
-        self.lbl_queryplanblocks = QLabel("<b>Query Plan (Blocks Accessed):</b>")
+        self.lbl_queryplanblocks = QLabel(
+            "<b>Query Plan (Blocks Accessed):</b>"
+        )
         self.lbl_block_explore = QLabel("<i>Blocks Explored:</i>")
         self.lbl_queryplanblocks_relation = QLabel("Choose Relation:")
         self.lbl_queryplanblocks_block_id = QLabel("Choose Block ID:")
         self.lbl_sample_queries = QLabel("Select a sample query: ")
 
         self.sample_input = QComboBox()
-        self.sample_input.addItems([''] + [f'Sample {i}' for i in self.sample_queries])
+        self.sample_input.addItems(
+            [""] + [f"Sample {i}" for i in self.sample_queries]
+        )
         self.sample_input.currentIndexChanged.connect(self.update_query_field)
 
         self.query_input = QTextEdit()
@@ -223,10 +245,14 @@ class QueryInputForm(QWidget):
         # dropdowns for exploring blocks
         self.relation_dropdown = QComboBox()
         self.relation_dropdown.setEnabled(False)
-        self.relation_dropdown.currentTextChanged.connect(lambda relation: self.update_block_id_dropdown(relation))
+        self.relation_dropdown.currentTextChanged.connect(
+            lambda relation: self.update_block_id_dropdown(relation)
+        )
         self.block_id_dropdown = QComboBox()
         self.block_id_dropdown.setEnabled(False)
-        self.block_id_dropdown.currentTextChanged.connect(lambda block_id: self.show_block_contents(block_id))
+        self.block_id_dropdown.currentTextChanged.connect(
+            lambda block_id: self.show_block_contents(block_id)
+        )
 
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.lbl_heading)
@@ -259,7 +285,9 @@ class QueryInputForm(QWidget):
         if self.sample_input.currentIndex() == 0:
             self.query_input.setPlainText("")
         else:
-            self.query_input.setPlainText(self.sample_queries[self.sample_input.currentIndex()])
+            self.query_input.setPlainText(
+                self.sample_queries[self.sample_input.currentIndex()]
+            )
 
     def close_application(self):
         QApplication.quit()
@@ -267,7 +295,9 @@ class QueryInputForm(QWidget):
     def execute_query(self, query):
         self.query_result.clear()
         self._con.reconnect()
-        self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b>")
+        self.lbl_queryplanblocks.setText(
+            "<b>Query Plan (Blocks Accessed):</b>"
+        )
         self.lbl_block_explore.setText("<i>Blocks Explored:</i>")
         self.relation_dropdown.clear()
         self.relation_dropdown.setEnabled(False)
@@ -290,9 +320,7 @@ class QueryInputForm(QWidget):
             self.qep = qep
             self.qeptree_button.setEnabled(True)
 
-            self.query_result.setPlainText(
-                json.dumps(qepjson, indent=4)
-            )
+            self.query_result.setPlainText(json.dumps(qepjson, indent=4))
         except Exception as e:
             self.query_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
@@ -304,31 +332,43 @@ class QueryInputForm(QWidget):
             self.blocks_accessed = qep.get_blocks_accessed(self._con)
 
             self.lbl_block_explore.setText(
-                f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
+                f"<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>"
+            )
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
         except UnsupportedQueryException:
-            self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: this query is unsupported, hence might not have accurate blocks accessed)")
+            self.lbl_queryplanblocks.setText(
+                "<b>Query Plan (Blocks Accessed):</b> (Note: this query is unsupported, hence might not have accurate blocks accessed)"
+            )
             self.lbl_block_explore.setText(
-                f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
+                f"<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>"
+            )
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
 
     def update_relation_dropdown(self):
         self.relation_dropdown.clear()
         self.relation_dropdown.setEnabled(True)
-        self.relation_dropdown.addItems([""] + list(self.blocks_accessed.keys()))
+        self.relation_dropdown.addItems(
+            [""] + list(self.blocks_accessed.keys())
+        )
 
     def update_block_id_dropdown(self, relation):
         self.relation = relation
-        
+
         if self.relation == "":
             self.block_id_dropdown.clear()
             self.block_id_dropdown.setEnabled(False)
         else:
             self.block_id_dropdown.clear()
             self.block_id_dropdown.setEnabled(True)
-            self.block_id_dropdown.addItems([""] + sorted([str(i) for i in self.blocks_accessed[self.relation]], key=lambda x: int(x)))
+            self.block_id_dropdown.addItems(
+                [""]
+                + sorted(
+                    [str(i) for i in self.blocks_accessed[self.relation]],
+                    key=lambda x: int(x),
+                )
+            )
 
     def show_block_contents(self, block_id):
         self.block_id = block_id
@@ -337,14 +377,17 @@ class QueryInputForm(QWidget):
             self.block_content_view.setPlainText("")
         else:
             headers = ["ctid"] + self._con.get_relation_headers(self.relation)
-            block_contents = self._con.get_block_contents(self.block_id, self.relation)
+            block_contents = self._con.get_block_contents(
+                self.block_id, self.relation
+            )
 
             table = PrettyTable()
             table.field_names = headers
             table.add_rows(block_contents)
 
             self.block_content_view.setPlainText(
-                f"Block ID: {self.block_id} - Relation: {self.relation}\n{table.get_string()}")
+                f"Block ID: {self.block_id} - Relation: {self.relation}\n{table.get_string()}"
+            )
 
     def display_qep_tree(self):
         try:
@@ -352,6 +395,7 @@ class QueryInputForm(QWidget):
             new_window.show()
         except Exception as e:
             print(f"Error displaying QEP tree: {e}")
+
 
 class QEPTree(QWidget):
     def __init__(self, qep):
@@ -366,9 +410,9 @@ class QEPTree(QWidget):
         self.layout.addWidget(self.lbl_heading)
 
         fig = self.generate_fig()
-        html = '<html><body>'
-        html += plt.plot(fig, output_type='div', include_plotlyjs='cdn')
-        html += '</body></html>'
+        html = "<html><body>"
+        html += plt.plot(fig, output_type="div", include_plotlyjs="cdn")
+        html += "</body></html>"
         self.view = QWebEngineView()
         self.view.setHtml(html)
         self.layout.addWidget(self.view)
@@ -387,7 +431,7 @@ class QEPTree(QWidget):
     def generate_fig(self):
         # G = Graph.Tree(idCounter, 2)  # 2 stands for children number
         G = Graph()
-        q = deque([(-1, 0, self.qep.root)]) # add root to graph
+        q = deque([(-1, 0, self.qep.root)])  # add root to graph
         idCounter = 1
         labels = []
         hovertexts = []
@@ -401,29 +445,37 @@ class QEPTree(QWidget):
             "Group": ["Filter"],
             "Sort": ["Sort Key", "Sort Method"],
             "Index": ["Index Cond", "Filter"],
-            "": ["Startup Cost", "Total Cost", "Plan Rows", "Plan Width"]
+            "": ["Startup Cost", "Total Cost", "Plan Rows", "Plan Width"],
         }
         label_map = {
             "Scan": "Relation Name",
             "Hash Join": "Hash Cond",
             "Merge Join": "Merge Cond",
-            "Sort": "Sort Key"
+            "Sort": "Sort Key",
         }
 
         while q:
-            for _ in range(len(q)): # level order traversal
+            for _ in range(len(q)):  # level order traversal
                 parent, i, cur = q.popleft()
                 G.add_vertex(i)
 
                 label = f"<b>{cur.node_type}</b>"
-                label_parser = lambda x: f"<br>{cur.attributes[x]}" if x in cur.attributes else ""
+                label_parser = (
+                    lambda x: f"<br>{cur.attributes[x]}"
+                    if x in cur.attributes
+                    else ""
+                )
                 for label_match, attr in label_map.items():
                     if label_match in cur.node_type:
                         label += label_parser(attr)
                 labels.append(label)
 
                 hovertext = f"<b><i>{cur.node_type}</i></b><br>"
-                hovertext_parser = lambda x: f"{x}: {cur.attributes[x]}<br>" if x in cur.attributes else ""
+                hovertext_parser = (
+                    lambda x: f"{x}: {cur.attributes[x]}<br>"
+                    if x in cur.attributes
+                    else ""
+                )
                 for node_match, attributes in hovertext_map.items():
                     if node_match in cur.node_type:
                         for attr in attributes:
@@ -432,13 +484,13 @@ class QEPTree(QWidget):
 
                 if parent != -1:
                     G.add_edge(parent, i)
-                
+
                 for child in cur.children:
                     q.append((i, idCounter, child))
                     idCounter += 1
 
         # Note: code below referenced from https://plotly.com/python/tree-plots/
-        lay = G.layout('rt', root=[0])
+        lay = G.layout("rt", root=[0])
 
         position = {k: lay[k] for k in range(idCounter)}
         Y = [lay[k][1] for k in range(idCounter)]
@@ -449,29 +501,40 @@ class QEPTree(QWidget):
 
         L = len(position)
         Xn = [position[k][0] for k in range(L)]
-        Yn = [2*M-position[k][1] for k in range(L)]
+        Yn = [2 * M - position[k][1] for k in range(L)]
         Xe = []
         Ye = []
         for edge in E:
             Xe += [position[edge[0]][0], position[edge[1]][0], None]
-            Ye += [2*M-position[edge[0]][1], 2*M-position[edge[1]][1], None]
+            Ye += [
+                2 * M - position[edge[0]][1],
+                2 * M - position[edge[1]][1],
+                None,
+            ]
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=Xe,
-                                 y=Ye,
-                                 mode='lines',
-                                 line=dict(color='rgb(210,210,210)', width=1),
-                                 hoverinfo='none'
-                                 ))
-        fig.add_trace(go.Scatter(x=Xn,
-                                 y=Yn,
-                                 mode='text',
-                                 text=labels,
-                                 hovertext=hovertexts,
-                                 hoverinfo='text'
-                                 ))
+        fig.add_trace(
+            go.Scatter(
+                x=Xe,
+                y=Ye,
+                mode="lines",
+                line=dict(color="rgb(210,210,210)", width=1),
+                hoverinfo="none",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=Xn,
+                y=Yn,
+                mode="text",
+                text=labels,
+                hovertext=hovertexts,
+                hoverinfo="text",
+            )
+        )
 
-        axis = dict(showline=False, # hide axis line, grid, ticklabels and  title
+        axis = dict(
+            showline=False,  # hide axis line, grid, ticklabels and  title
             zeroline=False,
             showgrid=False,
             showticklabels=False,
@@ -483,10 +546,10 @@ class QEPTree(QWidget):
             xaxis=axis,
             yaxis=axis,
             margin=dict(l=0, r=0, b=0, t=0),
-            hovermode='closest',
-            plot_bgcolor='rgb(248,248,248)',
+            hovermode="closest",
+            plot_bgcolor="rgb(248,248,248)",
             dragmode="pan",
-            margin_pad=10
+            margin_pad=10,
         )
 
         fig.update_yaxes(automargin=True)
