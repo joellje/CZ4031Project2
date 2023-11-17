@@ -194,8 +194,8 @@ class QueryInputForm(QWidget):
         self.query_input.setPlaceholderText(
             "e.g. SELECT * FROM orders AS o INNER JOIN customer AS c ON o.o_custkey = c.c_custkey;"
         )
-        self.lbl_result = QTextBrowser()
-        self.lbl_result.setPlainText(
+        self.query_result = QTextBrowser()
+        self.query_result.setPlainText(
             "Result details will be displayed here after querying."
         )
 
@@ -217,7 +217,7 @@ class QueryInputForm(QWidget):
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setWidget(self.lbl_result)
+        self.scroll_area.setWidget(self.query_result)
 
         # dropdowns for exploring blocks
         self.relation_dropdown = QComboBox()
@@ -264,8 +264,9 @@ class QueryInputForm(QWidget):
         QApplication.quit()
 
     def execute_query(self, query):
-        self.lbl_result.clear()
+        self.query_result.clear()
         self._con.reconnect()
+        self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b>")
         self.lbl_block_explore.setText("<i>Blocks Explored:</i>")
         self.relation_dropdown.clear()
         self.relation_dropdown.setEnabled(False)
@@ -280,17 +281,18 @@ class QueryInputForm(QWidget):
         self.qeptree_button.setEnabled(False)
         self.qep = None
         try:
-            self.lbl_result.setPlainText("Getting query plan...")
+            self.query_result.setPlainText("Getting query plan...")
             print("Getting QEP for: " + query)
             qepjson, qep = self._con.get_qep(query)
+
             self.qep = qep
             self.qeptree_button.setEnabled(True)
 
-            self.lbl_result.setPlainText(
+            self.query_result.setPlainText(
                 json.dumps(qepjson, indent=4)
             )
         except Exception as e:
-            self.lbl_result.setPlainText(
+            self.query_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
             return
@@ -302,8 +304,11 @@ class QueryInputForm(QWidget):
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
         except UnsupportedQueryException:
-            # TODO
-            pass
+            self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: queries with Aggregate in the QEP might not have accurate blocks accessed)")
+            self.lbl_block_explore.setText(
+                f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
+            self.update_relation_dropdown()
+            self.relation_dropdown.setEnabled(True)
 
     def update_relation_dropdown(self):
         self.relation_dropdown.clear()
