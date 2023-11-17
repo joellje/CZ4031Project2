@@ -194,7 +194,7 @@ class DatabaseConnection:
                 raise ValueError
 
     def create_view(self, view_name: str, statement: str):
-        view_statement = f"CREATE VIEW {view_name} AS {statement}"
+        view_statement = f"CREATE VIEW {view_name} AS {statement};"
         print(f"Creating view: {view_statement}")
         try:
             with self._con.cursor() as cursor:
@@ -204,6 +204,20 @@ class DatabaseConnection:
             raise e
 
         self.views.append(view_name)
+
+    def get_table_col_names(self, table_name: str):
+        with self._con.cursor() as cursor:
+            cursor.execute(
+                "SELECT column_name "
+                "FROM information_schema.columns "
+                "WHERE table_schema = 'public' "
+                f"AND table_name = '{table_name.lower()}';"
+            )
+            out = cursor.fetchall()
+            out = [o[0] for o in out]
+            if out is None:
+                raise ValueError
+            return out
 
 
 class QueryExecutionPlan:
@@ -267,7 +281,6 @@ class QueryExecutionPlan:
     def _get_blocks_accessed(self, root: Node, con: DatabaseConnection):
         for child in root.children:
             self._get_blocks_accessed(child, con)
-        print(root.node_type, " ", root.node_id)
         blocks_accessed = dict()
 
         match root.node_type:
@@ -368,12 +381,19 @@ class QueryExecutionPlan:
                     join_cond = re.sub(
                         rf"{outer_alias}\.", f"{outer.node_id}.", join_cond
                     )
+
+                # TODO: error handling
+                inner_cols = con.get_table_col_names(inner.node_id)
+                outer_cols = con.get_table_col_names(outer.node_id)
+                select_cols = list(set().union(inner_cols, outer_cols))
+
                 # TODO: error handling
                 join_statement = build_join(
                     inner.node_id,
                     outer.node_id,
                     join_cond,
                     root[JOIN_TYPE],
+                    select_cols,
                 )
                 con.create_view(root.node_id, join_statement)
             case (
