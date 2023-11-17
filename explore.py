@@ -141,7 +141,7 @@ class DatabaseConnection:
                 WHERE table_name = '{relation}';"
             )
             out = cursor.fetchall()
-            
+
             if out:
                 return [i[0] for i in out]
             else:
@@ -201,7 +201,7 @@ class DatabaseConnection:
             with self._con.cursor() as cursor:
                 cursor.execute(view_statement)
         except Exception as e:
-            print(e)
+            self._con.rollback()
             raise e
 
         self.views.append(view_name)
@@ -234,13 +234,13 @@ class QueryExecutionPlan:
             plan: query execution plan an a dictionary
         """
         self.table_map = {
-            'ps' : 'partsupp',
-            'l':'lineitem',
-            'n' : 'nation',
-            'o': 'orders',
-            'p': 'part',
-            'r': 'region',
-            's': 'supplier'
+            "ps": "partsupp",
+            "l": "lineitem",
+            "n": "nation",
+            "o": "orders",
+            "p": "part",
+            "r": "region",
+            "s": "supplier",
         }
         self.table_map_reverse = {self.table_map[i]: i for i in self.table_map}
         self.planning_time = plan[PLANNING_TIME]
@@ -424,23 +424,43 @@ class QueryExecutionPlan:
                     # If the child has no view, it means that
                     # the node's descendents has a node
                     # that cannot be parsed(eg. aggregate)
+                    # we can skip it as there is no scans
+                    # done, thus no blocks accessed
+                    # raise e
                     pass
             case "Sort":
                 sort_key = root[SORT_KEY]
                 child = root.children[0]
-                con.create_view(
-                    root.node_id, build_select(child.node_id, order=sort_key)
-                )
-                root.attributes[ALIAS] = child[ALIAS]
-                self.views[child[ALIAS]] = root.node_id
+                try:
+                    con.create_view(
+                        root.node_id,
+                        build_select(child.node_id, order=sort_key),
+                    )
+                    root.attributes[ALIAS] = child[ALIAS]
+                    self.views[child[ALIAS]] = root.node_id
+                except psycopg2.errors.UndefinedTable:
+                    # If the child has no view, it means that
+                    # the node's descendents has a node
+                    # that cannot be parsed(eg. aggregate)
+                    # we can skip it as there is no scans
+                    # done, thus no blocks accessed
+                    pass
             case "Limit":
                 limit = root["Plan Rows"]
                 child = root.children[0]
-                con.create_view(
-                    root.node_id, build_select(child.node_id, limit=limit)
-                )
-                root.attributes[ALIAS] = child[ALIAS]
-                self.views[child[ALIAS]] = root.node_id
+                try:
+                    con.create_view(
+                        root.node_id, build_select(child.node_id, limit=limit)
+                    )
+                    root.attributes[ALIAS] = child[ALIAS]
+                    self.views[child[ALIAS]] = root.node_id
+                except psycopg2.errors.UndefinedTable:
+                    # If the child has no view, it means that
+                    # the node's descendents has a node
+                    # that cannot be parsed(eg. aggregate)
+                    # we can skip it as there is no scans
+                    # done, thus no blocks accessed
+                    pass
             case _:
                 # for other node types
                 pass

@@ -299,6 +299,7 @@ class QueryInputForm(QWidget):
             self.qep = qep
             self.qeptree_button.setEnabled(True)
         except Exception as e:
+            raise e
             self.lbl_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
