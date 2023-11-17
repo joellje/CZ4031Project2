@@ -316,7 +316,10 @@ class QueryExecutionPlan:
                 # If there is an undefined table when creating view, it means
                 # that it is filtering on a node that cannot be parsed.
                 # In this case, we cannot accurately get the blocks accessed
-                except psycopg2.errors.UndefinedTable:
+                except (
+                    psycopg2.errors.UndefinedTable,
+                    psycopg2.errors.UndefinedParameter,
+                ):
                     raise UnsupportedQueryException
 
             case "Index Scan" | "Index Only Scan" | "Bitmap Heap Scan":
@@ -376,7 +379,10 @@ class QueryExecutionPlan:
                 # If there is an undefined table when creating view, it means
                 # that it is filtering on a node that cannot be parsed.
                 # In this case, we cannot accurately get the blocks accessed
-                except psycopg2.errors.UndefinedTable:
+                except (
+                    psycopg2.errors.UndefinedTable,
+                    psycopg2.errors.UndefinedParameter,
+                ):
                     raise UnsupportedQueryException
 
             # Joins
@@ -469,7 +475,10 @@ class QueryExecutionPlan:
                     con.create_view(root.node_id, build_select(child.node_id))
                     root.attributes[ALIAS] = child[ALIAS]
                     self.views[child[ALIAS]] = root.node_id
-                except psycopg2.errors.UndefinedTable:
+                except (
+                    psycopg2.errors.UndefinedTable,
+                    psycopg2.errors.UndefinedParameter,
+                ):
                     # If the child has no view, it means that
                     # the node's descendents has a node
                     # that cannot be parsed(eg. aggregate)
@@ -487,7 +496,10 @@ class QueryExecutionPlan:
                     )
                     root.attributes[ALIAS] = child[ALIAS]
                     self.views[child[ALIAS]] = root.node_id
-                except psycopg2.errors.UndefinedTable:
+                except (
+                    psycopg2.errors.UndefinedTable,
+                    psycopg2.errors.UndefinedParameter,
+                ):
                     # If the child has no view, it means that
                     # the node's descendents has a node
                     # that cannot be parsed(eg. aggregate)
@@ -503,7 +515,10 @@ class QueryExecutionPlan:
                     )
                     root.attributes[ALIAS] = child[ALIAS]
                     self.views[child[ALIAS]] = root.node_id
-                except psycopg2.errors.UndefinedTable:
+                except (
+                    psycopg2.errors.UndefinedTable,
+                    psycopg2.errors.UndefinedParameter,
+                ):
                     # If the child has no view, it means that
                     # the node's descendents has a node
                     # that cannot be parsed(eg. aggregate)
