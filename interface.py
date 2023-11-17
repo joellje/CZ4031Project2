@@ -281,6 +281,7 @@ class QueryInputForm(QWidget):
         self.block_id_dropdown.setEnabled(False)
         self.qeptree_button.setEnabled(False)
         self.qep = None
+
         try:
             self.query_result.setPlainText("Getting query plan...")
             print("Getting QEP for: " + query)
@@ -297,6 +298,8 @@ class QueryInputForm(QWidget):
                 f"Failed to execute the query. Error: {e}"
             )
             return
+
+        self.blocks_accessed = dict()
         try:
             self.blocks_accessed = qep.get_blocks_accessed(self._con)
 
@@ -305,7 +308,6 @@ class QueryInputForm(QWidget):
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
         except UnsupportedQueryException:
-            self.blocks_accessed = qep.get_blocks_accessed(self._con)
             self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: this query is unsupported, hence might not have accurate blocks accessed)")
             self.lbl_block_explore.setText(
                 f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
