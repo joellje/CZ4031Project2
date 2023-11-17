@@ -125,30 +125,7 @@ class QueryInputForm(QWidget):
     def init_ui(self):
         self.sample_queries = {
             1: "SELECT c_name, c_address FROM customer;",
-            2: """SELECT o_orderkey, o_totalprice
-                FROM orders o
-                JOIN customer c ON o.o_custkey = c.c_custkey
-                WHERE c.c_mktsegment = 'Electronics';""",
-            3: """SELECT p_name, SUM(l_quantity) AS total_quantity, SUM(l_extendedprice) AS total_extendedprice
-                FROM lineitem l
-                JOIN part p ON l.l_partkey = p.p_partkey
-                WHERE p.p_container = 'Small'
-                GROUP BY p_name;""",
-            4: """SELECT c_name
-                FROM customer
-                WHERE c_custkey IN (
-                    SELECT o_custkey
-                    FROM orders
-                    WHERE o_totalprice > (SELECT AVG(o_totalprice) FROM orders)
-                );""",
-            5: """SELECT s_name, SUM(s_acctbal) AS total_balance
-                FROM supplier s
-                JOIN partsupp ps ON s.s_suppkey = ps.ps_suppkey
-                JOIN part p ON ps.ps_partkey = p.p_partkey
-                WHERE p.p_size > 100
-                    AND s.s_nationkey IN (SELECT n_nationkey FROM nation WHERE n_regionkey = 3)
-                GROUP BY s_name;""",
-            6: """SELECT
+            2: """SELECT
                 s_acctbal,
                 s_name,
                 n_name,
@@ -181,18 +158,18 @@ class QueryInputForm(QWidget):
                         AND n_regionkey = r_regionkey
                         AND r_name = 'EUROPE'
                 )
-            ORDER BY s_acctbal DESC, n_name, s_name, p_partkey""",
-            7: """SELECT * FROM customer WHERE c_mktsegment = 'Clothing';""",
-            8: """SELECT p_type, AVG(l_quantity) AS avg_quantity
+            ORDER BY s_acctbal DESC, n_name, s_name, p_partkey;""",
+            3: """SELECT p_type, AVG(l_quantity) AS avg_quantity
                 FROM lineitem l
                 JOIN part p ON l.l_partkey = p.p_partkey
                 GROUP BY p_type;""",
-            9: """SELECT n_name, COUNT(c_custkey) AS customer_count
+            4: """SELECT n_name, COUNT(c_custkey) AS customer_count
                 FROM nation n
                 LEFT JOIN customer c ON n.n_nationkey = c.c_nationkey
                 GROUP BY n_name
                 ORDER BY customer_count DESC
-                LIMIT 5"""
+                LIMIT 5;""",
+            5: """SELECT supp_nation, cust_nation, SUM(volume) AS revenue FROM      (   SELECT    n1.n_name AS supp_nation,    n2.n_name AS cust_nation,    l_extendedprice * (1 - l_discount) AS volume   FROM    supplier,    lineitem,    orders,    customer,    nation n1,    nation n2   WHERE    s_suppkey = l_suppkey    AND o_orderkey = l_orderkey    AND c_custkey = o_custkey    AND s_nationkey = n1.n_nationkey    AND c_nationkey = n2.n_nationkey    AND (     (n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')     OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')    )      ) AS shipping GROUP BY      supp_nation,      cust_nation ORDER BY      supp_nation,      cust_nation;"""
         }
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")

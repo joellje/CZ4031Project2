@@ -58,12 +58,19 @@ def build_join(
             join_type = "RIGHT OUTER"
         case _:
             raise ValueError(f"{join_type} is not a valid join type")
-
-    return f"SELECT * \
-            FROM \
-                {relation_inner} \
-            {join_type} JOIN {relation_outer} on {join_cond} \
-            "
+    
+    if join_cond == "":
+        return f"(SELECT * \
+                FROM \
+                    {relation_inner} \
+                CROSS JOIN {relation_outer}); \
+                "
+    else:
+        return f"SELECT * \
+                FROM \
+                    {relation_inner} \
+                {join_type} JOIN {relation_outer} on {join_cond} \
+                "
 
 
 def random_string(n: int = 5) -> str:
@@ -93,7 +100,7 @@ def get_aliases_in_condition(cond: str) -> Set[str]:
         >>> get_aliases_in_condition("(table_a.id = table_b.id)")
         {"table_a", "table_b"}
     """
-    return set(re.findall(r"([a-zA-Z_]+)\.[a-zA-Z_]+", cond))  # type: Set[str]
+    return set(re.findall(r"([a-zA-Z_1-9?]+)\.[a-zA-Z_]+", cond))  # type: Set[str]
 
 
 class ViewNotFoundException(Exception):
@@ -116,9 +123,13 @@ def replace_aliases_with_views(statement: str, views: Dict[str, str]) -> str:
         >>> replace_aliases_with_views("(table_a.id = table_b.b_id)")
         "(view_a.id = view_b.bid)"
     """
+    print("statement: ", statement)
+    print("views: ", views)
     aliases = get_aliases_in_condition(statement)
+    print("aliases: ", aliases)
     for alias in aliases:
         statement = re.sub(rf"{alias}\.", f"{views[alias]}.", statement)
+    print("statement: ", statement)
     return statement
 
 
