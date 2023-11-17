@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 import plotly.offline as plt
 from collections import deque
 
-from explore import DatabaseConnection, Node
+from explore import DatabaseConnection, Node, UnsupportedQueryException
 
 
 class DatabaseInputForm(QWidget):
@@ -304,7 +304,8 @@ class QueryInputForm(QWidget):
                 f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
-        except Exception as e:
+        except UnsupportedQueryException:
+            self.blocks_accessed = qep.get_blocks_accessed(self._con)
             self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: this query is unsupported, hence might not have accurate blocks accessed)")
             self.lbl_block_explore.setText(
                 f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
