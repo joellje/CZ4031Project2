@@ -58,7 +58,7 @@ def build_join(
             join_type = "RIGHT OUTER"
         case _:
             raise ValueError(f"{join_type} is not a valid join type")
-    
+
     if join_cond == "":
         return f"(SELECT * \
                 FROM \
@@ -100,7 +100,9 @@ def get_aliases_in_condition(cond: str) -> Set[str]:
         >>> get_aliases_in_condition("(table_a.id = table_b.id)")
         {"table_a", "table_b"}
     """
-    return set(re.findall(r"([a-zA-Z_1-9?]+)\.[a-zA-Z_]+", cond))  # type: Set[str]
+    return set(
+        re.findall(r"([a-zA-Z1-9?_]+)\.[a-zA-Z1-9_]+", cond)
+    )  # type: Set[str]
 
 
 class ViewNotFoundException(Exception):
@@ -123,13 +125,9 @@ def replace_aliases_with_views(statement: str, views: Dict[str, str]) -> str:
         >>> replace_aliases_with_views("(table_a.id = table_b.b_id)")
         "(view_a.id = view_b.bid)"
     """
-    print("statement: ", statement)
-    print("views: ", views)
     aliases = get_aliases_in_condition(statement)
-    print("aliases: ", aliases)
     for alias in aliases:
         statement = re.sub(rf"{alias}\.", f"{views[alias]}.", statement)
-    print("statement: ", statement)
     return statement
 
 
@@ -153,7 +151,7 @@ def condition_is_join(cond: str) -> bool:
 
     return (
         re.search(
-            r"[a-zA-Z_]+\.?[a-zA-Z_]+ = ([a-zA-Z_]+)\.[a-zA-Z_]+",
+            r"[a-zA-Z1-9_]+\.?[a-zA-Z1-9_]+ = ([a-zA-Z1-9_]+)\.[a-zA-Z1-9_]+",
             cond,
         )
         is not None
@@ -175,8 +173,8 @@ def alter_join_condition(cond: str) -> str:
         "(table_a.id IN (SELECT b_id from table_b))"
     """
     cond_attributes = re.search(
-        r"(?P<left>[a-zA-Z_]+\.?[a-zA-Z_]+) = "
-        r"(?P<table_right>[a-zA-Z_]+)\.(?P<right_column>[a-zA-Z_]+)",
+        r"(?P<left>[a-zA-Z1-9_]+\.?[a-zA-Z1-9_]+) = "
+        r"(?P<table_right>[a-zA-Z1-9_]+)\.(?P<right_column>[a-zA-Z1-9_]+)",
         cond,
     )
     if cond_attributes is None:
