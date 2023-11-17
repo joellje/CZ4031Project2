@@ -581,7 +581,7 @@ class QueryExecutionPlan:
                     con.create_view(
                         root.node_id,
                         build_select(
-                            root["Relation Name"].replace(" AND ", " OR "),
+                            root["Relation Name"],
                             [index_cond, filter],
                         ),
                     )
