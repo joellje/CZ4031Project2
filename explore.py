@@ -264,41 +264,32 @@ class QueryExecutionPlan:
                 if root.node_type == "Nested Loop":
                     # join condition of Nested Loop is in the inner child
                     if inner["Index Cond"]:
-                        join_cond = alter_join_condition(
-                            replace_aliases_with_views(
-                                inner["Index Cond"], self.views
-                            )
-                        )
+                        join_cond = inner["Index Cond"]
                     else:
                         join_cond = ""
                 elif root.node_type == "Hash Join":
                     join_cond = root[HASH_COND]
-                    aliases = re.findall(r"([a-zA-Z_1-9?]+)\.[a-zA-Z_]+", join_cond)
-                    print(join_cond)
-                    print(aliases)
-
-                    children = root.children
-                    for i in range(2):
-                        join_cond = re.sub(rf"{aliases[i]}\.", f"{children[i].node_id}.", join_cond)
-                    # join_cond = replace_aliases_with_views(
-                    #     root[HASH_COND], self.views
-                    # )
-                    print(join_cond)
                 else:
-                    # join_cond = replace_aliases_with_views(
-                    #     root[MERGE_COND], self.views
-                    # )
                     join_cond = root[MERGE_COND]
-                    aliases = re.findall(r"([a-zA-Z_1-9?]+)\.[a-zA-Z_]+", join_cond)
 
-                    children = root.children
-                    for i in range(2):
-                        join_cond = re.sub(rf"{aliases[i]}\.", f"{children[i].node_id}.", join_cond)
-                    # join_cond = replace_aliases_with_views(
-                    #     root[HASH_COND], self.views
-                    # )
-                    print(join_cond)
-
+                matches = re.findall(
+                    r"(?P<outer>[a-zA-Z1-9_]+)\.?[a-zA-Z1-9_]+ = "
+                    r"(?P<inner>[a-zA-Z1-9_]+)\.?[a-zA-Z1-9_]+",
+                    join_cond,
+                )
+                if matches is None:
+                    raise ValueError(
+                        f"Unable to find table aliases in join condition: {join_cond}"
+                    )
+                for outer_alias, inner_alias in matches:
+                    if root.node_type == "Nested Loop":
+                        outer_alias, inner_alias = inner_alias, outer_alias
+                    join_cond = re.sub(
+                        rf"{inner_alias}\.", f"{inner.node_id}.", join_cond
+                    )
+                    join_cond = re.sub(
+                        rf"{outer_alias}\.", f"{outer.node_id}.", join_cond
+                    )
                 # TODO: error handling
                 join_statement = build_join(
                     inner.node_id,
@@ -307,13 +298,18 @@ class QueryExecutionPlan:
                     root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
-            case "Gather Merge" | "Gather" | "Hash" | "Materialize" | "Sort" | "Memoize":
+            case (
+                "Gather Merge"
+                | "Gather"
+                | "Hash"
+                | "Materialize"
+                | "Sort"
+                | "Memoize"
+            ):
                 # These nodes do not alter the tuples of the child view,
                 # we can create a view that is the same as the child
                 child = root.children[0]
-                con.create_view(
-                    root.node_id, build_select(child.node_id, [])
-                )
+                con.create_view(root.node_id, build_select(child.node_id, []))
                 root.attributes[ALIAS] = child[ALIAS]
                 self.views[child[ALIAS]] = root.node_id
             case _:
