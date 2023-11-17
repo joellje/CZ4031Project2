@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 import plotly.offline as plt
 from collections import deque
 
-from explore import DatabaseConnection, Node, UnsupportedQueryException
+from explore import DatabaseConnection, Node
 
 
 class DatabaseInputForm(QWidget):
@@ -169,7 +169,8 @@ class QueryInputForm(QWidget):
                 GROUP BY n_name
                 ORDER BY customer_count DESC
                 LIMIT 5;""",
-            5: """SELECT supp_nation, cust_nation, SUM(volume) AS revenue FROM      (   SELECT    n1.n_name AS supp_nation,    n2.n_name AS cust_nation,    l_extendedprice * (1 - l_discount) AS volume   FROM    supplier,    lineitem,    orders,    customer,    nation n1,    nation n2   WHERE    s_suppkey = l_suppkey    AND o_orderkey = l_orderkey    AND c_custkey = o_custkey    AND s_nationkey = n1.n_nationkey    AND c_nationkey = n2.n_nationkey    AND (     (n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')     OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')    )      ) AS shipping GROUP BY      supp_nation,      cust_nation ORDER BY      supp_nation,      cust_nation;"""
+            5: """SELECT supp_nation, cust_nation, SUM(volume) AS revenue FROM      (   SELECT    n1.n_name AS supp_nation,    n2.n_name AS cust_nation,    l_extendedprice * (1 - l_discount) AS volume   FROM    supplier,    lineitem,    orders,    customer,    nation n1,    nation n2   WHERE    s_suppkey = l_suppkey    AND o_orderkey = l_orderkey    AND c_custkey = o_custkey    AND s_nationkey = n1.n_nationkey    AND c_nationkey = n2.n_nationkey    AND (     (n1.n_name = 'FRANCE' AND n2.n_name = 'GERMANY')     OR (n1.n_name = 'GERMANY' AND n2.n_name = 'FRANCE')    )      ) AS shipping GROUP BY      supp_nation,      cust_nation ORDER BY      supp_nation,      cust_nation;""",
+            6: "SELECT * FROM partsupp where ps_partkey < 30 or ps_suppkey < 20;"
         }
         self.lbl_heading = QLabel("Query the Database")
         self.lbl_heading.setStyleSheet("font-size: 20pt; font-weight: bold;")
@@ -194,8 +195,8 @@ class QueryInputForm(QWidget):
         self.query_input.setPlaceholderText(
             "e.g. SELECT * FROM orders AS o INNER JOIN customer AS c ON o.o_custkey = c.c_custkey;"
         )
-        self.lbl_result = QTextBrowser()
-        self.lbl_result.setPlainText(
+        self.query_result = QTextBrowser()
+        self.query_result.setPlainText(
             "Result details will be displayed here after querying."
         )
 
@@ -217,7 +218,7 @@ class QueryInputForm(QWidget):
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setWidget(self.lbl_result)
+        self.scroll_area.setWidget(self.query_result)
 
         # dropdowns for exploring blocks
         self.relation_dropdown = QComboBox()
@@ -264,8 +265,9 @@ class QueryInputForm(QWidget):
         QApplication.quit()
 
     def execute_query(self, query):
-        self.lbl_result.clear()
+        self.query_result.clear()
         self._con.reconnect()
+        self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b>")
         self.lbl_block_explore.setText("<i>Blocks Explored:</i>")
         self.relation_dropdown.clear()
         self.relation_dropdown.setEnabled(False)
@@ -280,17 +282,18 @@ class QueryInputForm(QWidget):
         self.qeptree_button.setEnabled(False)
         self.qep = None
         try:
-            self.lbl_result.setPlainText("Getting query plan...")
+            self.query_result.setPlainText("Getting query plan...")
             print("Getting QEP for: " + query)
             qepjson, qep = self._con.get_qep(query)
+
             self.qep = qep
             self.qeptree_button.setEnabled(True)
 
-            self.lbl_result.setPlainText(
+            self.query_result.setPlainText(
                 json.dumps(qepjson, indent=4)
             )
         except Exception as e:
-            self.lbl_result.setPlainText(
+            self.query_result.setPlainText(
                 f"Failed to execute the query. Error: {e}"
             )
             return
@@ -301,9 +304,12 @@ class QueryInputForm(QWidget):
                 f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
             self.update_relation_dropdown()
             self.relation_dropdown.setEnabled(True)
-        except UnsupportedQueryException:
-            # TODO
-            pass
+        except Exception as e:
+            self.lbl_queryplanblocks.setText("<b>Query Plan (Blocks Accessed):</b> (Note: this query is unsupported, hence might not have accurate blocks accessed)")
+            self.lbl_block_explore.setText(
+                f'<i>Blocks Explored: {sum(len(blocks) for blocks in self.blocks_accessed.values())}</i>')
+            self.update_relation_dropdown()
+            self.relation_dropdown.setEnabled(True)
 
     def update_relation_dropdown(self):
         self.relation_dropdown.clear()

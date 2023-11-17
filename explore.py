@@ -28,9 +28,6 @@ SORT_KEY = "Sort Key"
 logger = logging.getLogger(__name__)
 
 
-class UnsupportedQueryException(Exception):
-    pass
-
 
 class DatabaseConnection:
     """
@@ -527,7 +524,7 @@ class QueryExecutionPlan:
                     pass
             case _:
                 # for other node types
-                pass
+                raise psycopg2.errors.UndefinedTable()
 
         self._merge_blocks_accessed(blocks_accessed)
 
