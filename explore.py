@@ -85,7 +85,9 @@ def build_join(
         case "Right":
             join_type = "RIGHT OUTER"
         case _:
-            raise ValueError(f"{join_type} is not a valid join type")
+            raise UnsupportedQueryException(
+                f"{join_type} is not a valid join type"
+            )
 
     if join_cond == "":
         return f"(SELECT {','.join(select_cols)} \
