@@ -315,12 +315,13 @@ class QueryExecutionPlan:
                         self.views[root[ALIAS]] = root.node_id
                 # If there is an undefined table when creating view, it means
                 # that it is filtering on a node that cannot be parsed.
-                # In this case, we cannot accurately get the blocks accessed
+                # Since sequential scan access all blocks in the relation,
+                # we can continue search parent nodes
                 except (
                     psycopg2.errors.UndefinedTable,
                     psycopg2.errors.UndefinedParameter,
                 ):
-                    raise UnsupportedQueryException
+                    pass
 
             case "Index Scan" | "Index Only Scan" | "Bitmap Heap Scan":
                 index_cond = root["Index Cond"]
