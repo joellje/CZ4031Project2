@@ -49,12 +49,24 @@ class DatabaseConnection:
     def connection_url(self) -> str:
         """
         Get the url of this connection
+
+        Returns:
+        str: the url of this connection
         """
         return "postgres://{}:<PASSWORD>@{}:{}/{}".format(
             self._user, self._host, self._port, self._database
         )
 
     def _query_qep(self, query: str) -> Dict[str, Any]:
+        """
+        Query the database and return the query execution plan
+
+        Args:
+        query (str): the SQL query to be executed
+
+        Returns:
+        Dict[str, Any]: the query execution plan
+        """
         with self._con.cursor() as cursor:
             cursor.execute(
                 f"EXPLAIN \
@@ -77,11 +89,30 @@ class DatabaseConnection:
                 raise ValueError
 
     def get_qep(self, query: str) -> Tuple[Any, QueryExecutionPlan]:
+        """
+        Get the query execution plan for the given SQL query
+
+        Args:
+        query (str): the SQL query to be executed
+
+        Returns:
+        Tuple[Any, QueryExecutionPlan]: a tuple containing the query execution plan and the QueryExecutionPlan object
+        """
         output = self._query_qep(query)
         qep = QueryExecutionPlan(copy.deepcopy(output), self)
         return (output, qep)
 
     def get_relation_headers(self, relation: str) -> List:
+        """
+        Get the headers for a particular relation
+
+        Args:
+        relation (str): the name of the relation
+
+        Returns:
+        List: a list of strings with the headers of the relation
+        """
+
         with self._con.cursor() as cursor:
             cursor.execute(
                 f"SELECT column_name \
@@ -96,12 +127,15 @@ class DatabaseConnection:
                 raise ValueError
 
     def get_block_contents(self, block_id: int, relation: str) -> List:
-        """get contents of block with block_id of relation
-
-        Keyword arguments:
-        block_id -- block_id of block
-        relation -- relation that contains block
-        Return: list of tuples with block_id of relation
+        """
+        Get the contents of the block with the given block_id in the given relation
+        
+        Args:
+        block_id (int): the block_id of the block
+        relation (str): the relation that contains the block
+        
+        Returns:
+        List: a list of tuples with the block_id of the relation
         """
 
         with self._con.cursor() as cursor:
@@ -116,7 +150,16 @@ class DatabaseConnection:
             else:
                 raise ValueError
 
-    def get_relation_block_ids(self, relation_name: str):
+    def get_relation_block_ids(self, relation_name: str) -> List:
+        """
+        Get the block_ids of the given relation
+
+        Args:
+        relation_name (str): the name of the relation
+
+        Returns:
+        List: a list of block_ids of the relation
+		"""
         with self._con.cursor() as cursor:
             cursor.execute(
                 f"SELECT DISTINCT (ctid::text::point)[0]::bigint as block_id \
