@@ -9,13 +9,20 @@ if TYPE_CHECKING:
     from explore import Node
 
 
-def build_select(relation: str, conditions: List[str]) -> str:
+def build_select(
+    relation: str,
+    conditions: List[str] = [],
+    order: List[str] = [],
+    limit: int = 0,
+) -> str:
     """
     Build a SELECT query
 
     Args:
         relation: relation to select from
         conditions: conditions for the WHERE clause
+        order: sort keys
+        limit: number of rows to limit
 
     Returns:
         SELECT query on relation with conditions
@@ -24,6 +31,9 @@ def build_select(relation: str, conditions: List[str]) -> str:
     conditions = [c for c in conditions if c is not None]
     if len(conditions) > 0:
         query += f" WHERE {'AND'.join(conditions)}"
+    if len(order) > 0:
+        query += f" ORDER BY {','.join(order)}"
+    query += f" LIMIT {limit}"
 
     return query
 
@@ -33,7 +43,7 @@ def build_join(
     relation_outer: str,
     join_cond: str,
     join_type: str,
-    select_cols: List[str] = ["*"]
+    select_cols: List[str] = ["*"],
 ) -> str:
     """
     Build a JOIN query
