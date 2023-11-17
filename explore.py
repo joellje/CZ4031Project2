@@ -8,10 +8,19 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import psycopg2
 
-from utils import build_join, build_select, random_string
+from utils import (alter_join_condition, build_join, build_select,
+                   condition_is_join, get_aliases_in_condition,
+                   get_child_with_attribute, random_string,
+                   replace_aliases_with_views)
 
+# Attribute Keys
 PLANNING_TIME = "Planning Time"
 EXECUTION_TIME = "Execution Time"
+ALIAS = "Alias"
+PARENT_RELATIONSHIP = "Parent Relationship"
+HASH_COND = "Hash Cond"
+MERGE_COND = "Merge Cond"
+JOIN_TYPE = "Join Type"
 
 logger = logging.getLogger(__name__)
 
@@ -178,8 +187,6 @@ class DatabaseConnection:
                 query += f"WHERE {condition}"
             cursor.execute(query)
             out = cursor.fetchall()
-            print("-------", query)
-            print(out)
             if out is not None:
                 return out
             else:
@@ -262,6 +269,7 @@ class QueryExecutionPlan:
         match root.node_type:
             # Scans
             case "Seq Scan" | "Parallel Seq Scan":
+                # Sequential scan will access all blocks of relation
                 blocks_accessed[root["Relation Name"]] = {
                     block_id[0]
                     for block_id in con.get_relation_block_ids(
@@ -272,39 +280,34 @@ class QueryExecutionPlan:
                     root.node_id,
                     build_select(root["Relation Name"], [root["Filter"]]),
                 )
-                if root["Alias"] is not None:
-                    self.views[root["Alias"]] = root.node_id
+                if root[ALIAS] is not None:
+                    self.views[root[ALIAS]] = root.node_id
+
             case "Index Scan" | "Index Only Scan":
                 index_cond = root["Index Cond"]
                 filter = root["Filter"]
-                if index_cond is not None:
-                    aliases = set(
-                        re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
-                    )
-                    for alias in aliases:
-                        index_cond.replace(alias, self.views[alias[:-1]])
-                    if (
-                        re.search(
-                            r"[a-zA-Z_]+\.?[a-zA-Z_]+ = ([a-zA-Z_]+)\.[a-zA-Z_]+",
-                            index_cond,
-                        )
-                        is not None
-                    ):
-                        matches = re.search(
-                            r"(?P<attr>[a-zA-Z_]+\.?[a-zA-Z_]+) = (?P<table>[a-zA-Z_]+)\.(?P<column>[a-zA-Z_]+)",
-                            index_cond,
-                        )
-                        index_cond = f"{matches.group('attr')} IN (SELECT {matches.group('column')} FROM {self.views[matches.group('table')]})"
-                        root.attributes["Index Cond"] = index_cond
 
+                # Replace table names in condition with view names
+                if index_cond is not None:
+                    index_cond = replace_aliases_with_views(
+                        index_cond, self.views
+                    )
+
+                    if condition_is_join(index_cond):
+                        # If index condition is a join,
+                        # alter the condition for SELECT query to work
+                        # TODO: error handling
+                        index_cond = alter_join_condition(index_cond)
+
+                # Replace table names in condition with filter names
                 if filter is not None:
                     aliases = set(
                         re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", filter)
                     )
-                    for alias in aliases:
-                        filter.replace(alias, self.views[alias[:-1]])
+                    for table in aliases:
+                        filter.replace(table, self.views[table[:-1]])
 
-                # SELECT * FROM ps WHERE ps_partkey IN (SELECT p_partkey FROM p)
+                # Index only scan do not access blocks
                 if root.node_type == "Index Scan":
                     blocks_accessed[root["Relation Name"]] = {
                         block_id[0]
@@ -319,81 +322,47 @@ class QueryExecutionPlan:
                         [index_cond, filter],
                     ),
                 )
-                if root["Alias"] is not None:
-                    self.views[root["Alias"]] = root.node_id
+                if root[ALIAS] is not None:
+                    self.views[root[ALIAS]] = root.node_id
             # Joins
-            case "Nested Loop":
+            case "Nested Loop" | "Hash Join" | "Merge Join":
                 for child in root.children:
                     self._get_blocks_accessed(child, con)
-                inner = next(
-                    child
-                    for child in root.children
-                    if child["Parent Relationship"] == "Inner"
+                inner = get_child_with_attribute(
+                    root, PARENT_RELATIONSHIP, "Inner"
                 )
-                index_cond = inner["Index Cond"]
-                outer = next(
-                    child
-                    for child in root.children
-                    if child["Parent Relationship"] == "Outer"
+                outer = get_child_with_attribute(
+                    root, PARENT_RELATIONSHIP, "Outer"
                 )
-                aliases = set(
-                    re.findall(r"([a-zA-Z_]+\.)[a-zA-Z_]+", index_cond)
-                )
-                for alias in aliases:
-                    index_cond.replace(alias, self.views[alias[:-1]])
+                # TODO: error handling
+                assert inner is not None and outer is not None
+                print(inner.node_id)
 
+                if root.node_type == "Nested Loop":
+                    # join condition of Nested Loop is in the inner child
+                    join_cond = alter_join_condition(
+                        replace_aliases_with_views(
+                            inner["Index Cond"], self.views
+                        )
+                    )
+                elif root.node_type == "Hash Join":
+                    join_cond = replace_aliases_with_views(
+                        root[HASH_COND], self.views
+                    )
+                else:
+                    join_cond = replace_aliases_with_views(
+                        root[MERGE_COND], self.views
+                    )
+
+                # TODO: error handling
                 join_statement = build_join(
                     inner.node_id,
                     outer.node_id,
-                    index_cond,
-                    root["Join Type"],
+                    join_cond,
+                    root[JOIN_TYPE],
                 )
                 con.create_view(root.node_id, join_statement)
 
-            case "Hash Join":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-                alias_inner = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Inner"
-                )
-                alias_outer = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Outer"
-                )
-                join_statement = build_join(
-                    self.views[alias_inner],
-                    self.views[alias_outer],
-                    root["Hash Cond"]
-                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
-                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
-                    root["Join Type"],
-                )
-                con.create_view(root.node_id, join_statement)
-            case "Merge Join":
-                for child in root.children:
-                    self._get_blocks_accessed(child, con)
-                alias_inner = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Inner"
-                )
-                alias_outer = next(
-                    child["Alias"]
-                    for child in root.children
-                    if child["Parent Relationship"] == "Outer"
-                )
-                join_statement = build_join(
-                    self.views[alias_inner],
-                    self.views[alias_outer],
-                    root["Merge Cond"]
-                    .replace(f"{alias_inner}.", f"{self.views[alias_inner]}.")
-                    .replace(f"{alias_outer}.", f"{self.views[alias_outer]}."),
-                    root["Join Type"],
-                )
-                con.create_view(root.node_id, join_statement)
             # Others
             case "Aggregate":
                 for child in root.children:
@@ -421,6 +390,9 @@ class Node:
         self,
         children_plans: Optional[List[Dict[str, Any]]],
     ):
+        """
+        Depth first search and set children
+        """
         self.node_id = f"{self.node_type.replace(' ', '_')}_{random_string()}"
         if children_plans is not None:
             self.children = [
@@ -434,9 +406,18 @@ class Node:
         else:
             self.children = []
         if self.node_type in ("Hash", "Sort", "Gather Merge", "Gather"):
-            self.attributes["Alias"] = self.children[0]["Alias"]
+            self.attributes[ALIAS] = self.children[0][ALIAS]
 
     def __getitem__(self, attr: str) -> Any:
+        """
+        Get attribute of node
+
+        Args:
+            attr: attribute
+
+        Returns:
+            Attribute of node if exists else None
+        """
         if attr in self.attributes.keys():
             return self.attributes[attr]
         return None
